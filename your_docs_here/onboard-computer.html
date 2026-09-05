@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Onboard Computer &amp; Flight Software — Docs</title>
+</head>
+<body>
+<nav>
+<ul>
+<li><a href="/docs/home">Home</a></li>
+<li><a href="/docs/subsystems">Subsystems</a></li>
+<li><a href="/docs/api">API Reference</a></li>
+<li><a href="/docs/downloads">Downloads</a></li>
+<li><a href="/docs/support">Support</a></li>
+</ul>
+<div class="search-box">Search documentation...</div>
+</nav>
+
+<main>
+<h1>Onboard Computer and Flight Software</h1>
+
+<p>The onboard computer (OBC) is the CubeSat's central processing unit. It runs the flight software that sequences every other subsystem, schedules payload and communications activity, logs telemetry, and executes fault-handling logic when something goes wrong. Because it sits in the critical path for nearly every spacecraft function, the OBC is typically the most heavily tested piece of hardware on the bus before launch.</p>
+
+<h2>Processor Selection</h2>
+<p>OBC processor choice trades performance against power draw and radiation tolerance. Many CubeSat missions use commercial microcontrollers with software-level fault mitigation rather than expensive radiation-hardened parts, accepting a higher single-event-upset rate in exchange for lower cost and power consumption.</p>
+
+<table>
+<thead>
+<tr><th>Processor Family</th><th>Typical Clock Speed</th><th>Typical Power Draw</th></tr>
+</thead>
+<tbody>
+<tr><td>ARM Cortex-M4 (microcontroller class)</td><td>80–180 MHz</td><td>0.1–0.3 W</td></tr>
+<tr><td>ARM Cortex-A (SoC class)</td><td>800 MHz–1.5 GHz</td><td>1–3 W</td></tr>
+<tr><td>Radiation-hardened SPARC (e.g. LEON class)</td><td>50–100 MHz</td><td>0.5–1.5 W</td></tr>
+<tr><td>FPGA-based (soft-core processor)</td><td>50–200 MHz</td><td>0.3–2 W</td></tr>
+</tbody>
+</table>
+
+<h2>Watchdog Timers</h2>
+<p>A watchdog timer is a hardware or software counter that must be periodically reset by the flight software; if it isn't reset in time, the watchdog assumes the software has hung and forces a reset. Most OBC designs layer several watchdogs, from a fast software watchdog that catches a stuck task, up to a hardware watchdog external to the processor that can power-cycle the whole board if the processor itself becomes unresponsive.</p>
+
+<h2>Fault Handling and Software Updates</h2>
+<p>Flight software fault handling typically works from the same telemetry parameters used for anomaly detection elsewhere on the spacecraft: out-of-range voltages, unexpected temperature trends, or a subsystem that stops responding to commands. When a fault is detected, the OBC's response usually follows a predefined escalation, from logging and retrying at the least severe end up to forcing the spacecraft into a safe, sun-pointing mode at the most severe end. Software updates are uploaded via the uplink in stages, verified against a checksum before being written to non-volatile memory, and applied behind a rollback mechanism so a bad update can't permanently strand the spacecraft.</p>
+</main>
+
+<footer>
+<p>&copy; 2026 Example Aerospace Documentation Project. All rights reserved.</p>
+<p><a href="/docs/privacy">Privacy Policy</a> | <a href="/docs/terms">Terms of Use</a> | <a href="/docs/contact">Contact Us</a></p>
+<p class="version-tag">Docs build v4.12.0 — generated automatically. Report issues on the docs repository.</p>
+</footer>
+</body>
+</html>
