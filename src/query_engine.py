@@ -302,4 +302,60 @@ class QueryEngine:
             }
         except Exception as e:
             logger.error(f"Error getting statistics: {str(e)}")
-            return {} 
+            return {}
+
+    def generate_answer(
+        self,
+        query: str,
+        limit: int = 3,
+        model: str = "llama3.2:3b",
+        temperature: float = 0.0,
+        host: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Perform hybrid retrieval and generate a strictly grounded answer via local Ollama.
+        Enforces a hard negative guardrail: if the retrieved context does not contain
+        the answer, replies strictly with a fallback notice rather than speculating.
+        """
+        results = self.hybrid_search(query, limit=limit)
+        if not results:
+            return {
+                "answer": "The documentation does not contain information regarding this question.",
+                "sources": [],
+                "context": "",
+            }
+
+        context_chunks = [r.get("text", "") for r in results if r.get("text")]
+        context = "\n---\n".join(context_chunks)
+
+        prompt = (
+            "You are a strict, factual assistant. Answer the question based EXCLUSIVELY on the provided documentation context.\n"
+            "If the context does not contain the answer or specific details requested, state ONLY: "
+            "'The documentation does not contain information regarding this question.'\n"
+            "Do NOT infer, speculate, guess, or extrapolate beyond the provided text.\n\n"
+            f"Context:\n{context}\n\n"
+            f"Question: {query}\n\n"
+            "Answer:"
+        )
+
+        try:
+            import ollama
+            client = ollama.Client(host=host) if host else ollama.Client()
+            response = client.generate(
+                model=model,
+                prompt=prompt,
+                options={
+                    "temperature": temperature,
+                    "num_predict": 512,
+                },
+            )
+            answer = response.get("response", "").strip()
+        except Exception as exc:
+            logger.warning(f"Ollama generation failed: {exc}")
+            answer = f"Error generating answer via LLM: {exc}"
+
+        return {
+            "answer": answer,
+            "sources": results,
+            "context": context,
+        } 

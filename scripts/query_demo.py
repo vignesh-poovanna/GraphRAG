@@ -114,6 +114,13 @@ def setup_argparse():
     )
     
     parser.add_argument(
+        '--answer', '-a',
+        action='store_true',
+        default=False,
+        help='Synthesize grounded answer using local Ollama LLM with anti-hallucination guardrail'
+    )
+    
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         default=False,
@@ -366,6 +373,15 @@ def main():
                         output_text.append("\n" + "=" * 70 + "\n")
             else:
                 output_text.append("No results found")
+
+            # Grounded LLM answer generation if requested
+            if args.answer and results:
+                output_text.append("\n" + "=" * 70)
+                output_text.append("GROUNDED LLM ANSWER (Anti-Hallucination Guardrail Enabled)")
+                output_text.append("=" * 70)
+                answer_payload = query_engine.generate_answer(query, limit=limit)
+                output_text.append(answer_payload.get("answer", ""))
+                output_text.append("=" * 70)
         else:
             # No action specified
             output_text.append("Error: No action specified. Use --query, --document, --expand, --list-categories, or --stats")
