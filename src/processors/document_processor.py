@@ -224,9 +224,13 @@ class DocumentProcessor:
             # --- table detection ---
             is_table_line = stripped.startswith("|")
             if is_table_line and not in_table:
-                # Starting a table: flush preceding text
-                flush(current_lines, current_type)
-                current_lines = [line]
+                # If current_lines only contains a heading introducing this table, keep it with the table
+                lines_non_empty = [l.strip() for l in current_lines if l.strip()]
+                if len(lines_non_empty) == 1 and re.match(r'^#{1,4}\s+', lines_non_empty[0]):
+                    current_lines.append(line)
+                else:
+                    flush(current_lines, current_type)
+                    current_lines = [line]
                 current_type = 'table'
                 in_table = True
                 continue
@@ -257,26 +261,57 @@ class DocumentProcessor:
         return chunks if chunks else [("", "text")]
 
     # ------------------------------------------------------------------
-    # Fixed-size chunker (original logic, kept as sub-split + rollback)
+    # Boundary-aware chunker (never slices mid-word or mid-sentence)
     # ------------------------------------------------------------------
 
     def _fixed_chunks(self, text):
         chunks = []
         start = 0
         while start < len(text):
-            end = min(start + self.chunk_size, len(text))
-            if end < len(text):
-                pb = text.find('\n\n', max(start, end - 100), end + 100)
-                if pb != -1:
-                    end = pb + 2
+            if len(text) - start <= self.chunk_size:
+                chunk = text[start:].strip()
+                if chunk:
+                    chunks.append(chunk)
+                break
+
+            ideal_end = start + self.chunk_size
+            end = -1
+
+            # 1. Paragraph boundary (\n\n) within [ideal_end - 150, ideal_end + 150]
+            pb = text.rfind('\n\n', max(start, ideal_end - 150), min(len(text), ideal_end + 150))
+            if pb != -1 and pb > start:
+                end = pb + 2
+
+            # 2. Sentence boundary ([.!?]\s+) within [ideal_end - 200, ideal_end + 100]
+            if end == -1:
+                w_start = max(start, ideal_end - 200)
+                w_end = min(len(text), ideal_end + 100)
+                matches = list(re.finditer(r'[.!?]\s+', text[w_start:w_end]))
+                if matches:
+                    best_m = min(matches, key=lambda m: abs((w_start + m.end()) - ideal_end))
+                    end = w_start + best_m.end()
+
+            # 3. Word boundary: snap to nearest space so words are NEVER sliced in half
+            if end == -1:
+                space_idx = text.rfind(' ', max(start, ideal_end - 100), min(len(text), ideal_end + 40))
+                if space_idx != -1 and space_idx > start:
+                    end = space_idx + 1
                 else:
-                    sb = re.search(r'[.!?]\s+', text[max(start, end - 50):end + 50])
-                    if sb:
-                        end = max(start, end - 50) + sb.end()
+                    end = min(ideal_end, len(text))
+
             chunk = text[start:end].strip()
             if chunk:
                 chunks.append(chunk)
+
             if end >= len(text):
                 break
-            start = max(end - self.chunk_overlap, start + 1)
+
+            # Advance start with overlap, snapping forward to next word boundary
+            next_start = max(start + 1, end - self.chunk_overlap)
+            if next_start < end:
+                space_fwd = text.find(' ', next_start, min(end, next_start + 30))
+                if space_fwd != -1:
+                    next_start = space_fwd + 1
+            start = next_start
+
         return chunks

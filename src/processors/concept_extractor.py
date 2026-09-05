@@ -142,7 +142,11 @@ class ConceptExtractor:
         response = client.generate(
             model=self.model,
             prompt=prompt,
-            options={"temperature": 0.0},  # deterministic output for structured extraction
+            options={
+                "temperature": 0.1,
+                "num_predict": 1024,
+                "repeat_penalty": 1.1,
+            },
         )
         return response.get("response", "")
 
