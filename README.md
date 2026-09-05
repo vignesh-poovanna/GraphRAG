@@ -240,10 +240,28 @@ Execute hybrid queries combining vector similarity with graph traversal:
 python scripts/query_demo.py
 ```
 
-Programmatic query example:
+To get a grounded LLM answer (will refuse to answer if the context does not contain it):
 
 ```bash
-python -c "
+python scripts/query_demo.py --query "your question here" --answer
+```
+
+#### Programmatic Usage
+
+Save either snippet below as a `.py` file in the project root, then run it with:
+
+```bash
+# Windows
+.\venv\Scripts\python.exe my_query.py
+
+# Linux / macOS
+./venv/bin/python my_query.py
+```
+
+**Retrieval only** — returns ranked source chunks with scores, no LLM involved:
+
+```python
+# my_query.py
 from src.config import Config
 from src.database.neo4j_manager import Neo4jManager
 from src.database.qdrant_manager import QdrantManager
@@ -253,16 +271,46 @@ from src.query_engine import QueryEngine
 cfg = Config()
 emb = EmbeddingProcessor(cfg); emb.load_model()
 neo = Neo4jManager(cfg); neo.connect()
-qd = QdrantManager(cfg, emb); qd.connect()
+qd  = QdrantManager(cfg, emb); qd.connect()
 engine = QueryEngine(neo, qd, emb)
 
-results = engine.hybrid_search('Explain how components interact under fault conditions', limit=3)
+results = engine.hybrid_search("how do the subsystems interact under fault conditions", limit=3)
 for r in results:
-    print(f'[{r[\"doc_title\"]}] (Score: {r.get(\"score\", 0):.3f})\n{r[\"text\"][:200]}...\n')
+    print(r["text"][:300])
+    print("---")
 
 neo.close(); qd.close(); emb.unload_model()
-"
 ```
+
+**Grounded LLM answer** — retrieves context, then generates a strictly context-bound response.
+If the knowledge base does not contain the answer, the system returns exactly:
+`"The documentation does not contain information regarding this question."`
+
+```python
+# my_query.py
+from src.config import Config
+from src.database.neo4j_manager import Neo4jManager
+from src.database.qdrant_manager import QdrantManager
+from src.processors.embedding_processor import EmbeddingProcessor
+from src.query_engine import QueryEngine
+
+cfg = Config()
+emb = EmbeddingProcessor(cfg); emb.load_model()
+neo = Neo4jManager(cfg); neo.connect()
+qd  = QdrantManager(cfg, emb); qd.connect()
+engine = QueryEngine(neo, qd, emb)
+
+result = engine.generate_answer("how do the subsystems interact under fault conditions")
+print(result["answer"])
+
+neo.close(); qd.close(); emb.unload_model()
+```
+
+> **Important**: Do not call `ollama.generate()` or `ollama.chat()` directly.
+> `generate_answer()` enforces a system-level guardrail that prevents the LLM from using its
+> training knowledge. A manually crafted prompt will not reliably enforce this constraint,
+> especially with smaller models.
+
 
 ---
 

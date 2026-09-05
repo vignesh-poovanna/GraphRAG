@@ -304,6 +304,8 @@ class QueryEngine:
             logger.error(f"Error getting statistics: {str(e)}")
             return {}
 
+    _FALLBACK = "The documentation does not contain information regarding this question."
+
     def generate_answer(
         self,
         query: str,
@@ -314,48 +316,46 @@ class QueryEngine:
     ) -> Dict[str, Any]:
         """
         Perform hybrid retrieval and generate a strictly grounded answer via local Ollama.
-        Enforces a hard negative guardrail: if the retrieved context does not contain
-        the answer, replies strictly with a fallback notice rather than speculating.
+
+        Uses ollama.chat() with a hard system-role constraint so that small models
+        (e.g. llama3.2:3b) cannot fall back on their parametric knowledge.
+        If context is empty or the model still wanders outside it, the caller
+        receives the fallback notice verbatim.
         """
         results = self.hybrid_search(query, limit=limit)
         if not results:
-            return {
-                "answer": "The documentation does not contain information regarding this question.",
-                "sources": [],
-                "context": "",
-            }
+            return {"answer": self._FALLBACK, "sources": [], "context": ""}
 
         context_chunks = [r.get("text", "") for r in results if r.get("text")]
         context = "\n---\n".join(context_chunks)
 
-        prompt = (
-            "You are a strict, factual assistant. Answer the question based EXCLUSIVELY on the provided documentation context.\n"
-            "If the context does not contain the answer or specific details requested, state ONLY: "
-            "'The documentation does not contain information regarding this question.'\n"
-            "Do NOT infer, speculate, guess, or extrapolate beyond the provided text.\n\n"
-            f"Context:\n{context}\n\n"
-            f"Question: {query}\n\n"
-            "Answer:"
+        # System message: hard constraint before the model sees anything else.
+        # chat() with a system role is the most reliable way to lock small LLMs
+        # to context — generate() with inline instructions is trivially ignored.
+        system_msg = (
+            "You are a read-only retrieval assistant. "
+            "Your ONLY job is to extract and quote relevant information from the CONTEXT block below. "
+            "You MUST NOT use any knowledge from your training data. "
+            "You MUST NOT infer, speculate, extrapolate, or reason beyond what is explicitly stated in the CONTEXT. "
+            f"If the CONTEXT does not directly answer the question, respond with EXACTLY this sentence and nothing else: "
+            f'"{self._FALLBACK}"'
         )
+        user_msg = f"CONTEXT:\n{context}\n\nQUESTION: {query}"
 
         try:
             import ollama
             client = ollama.Client(host=host) if host else ollama.Client()
-            response = client.generate(
+            response = client.chat(
                 model=model,
-                prompt=prompt,
-                options={
-                    "temperature": temperature,
-                    "num_predict": 512,
-                },
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user",   "content": user_msg},
+                ],
+                options={"temperature": temperature, "num_predict": 512},
             )
-            answer = response.get("response", "").strip()
+            answer = response["message"]["content"].strip()
         except Exception as exc:
             logger.warning(f"Ollama generation failed: {exc}")
             answer = f"Error generating answer via LLM: {exc}"
 
-        return {
-            "answer": answer,
-            "sources": results,
-            "context": context,
-        } 
+        return {"answer": answer, "sources": results, "context": context}

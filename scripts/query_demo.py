@@ -377,7 +377,7 @@ def main():
             # Grounded LLM answer generation if requested
             if args.answer and results:
                 output_text.append("\n" + "=" * 70)
-                output_text.append("GROUNDED LLM ANSWER (Anti-Hallucination Guardrail Enabled)")
+                output_text.append("GROUNDED LLM ANSWER")
                 output_text.append("=" * 70)
                 answer_payload = query_engine.generate_answer(query, limit=limit)
                 output_text.append(answer_payload.get("answer", ""))
