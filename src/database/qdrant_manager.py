@@ -139,7 +139,9 @@ class QdrantManager:
                 payload = {
                     'text': chunk['text'],
                     'doc_id': chunk['doc_id'],
-                    'position': chunk['position']
+                    'position': chunk['position'],
+                    'source_type': chunk.get('source_type', 'md'),
+                    'chunk_type': chunk.get('chunk_type', 'text'),
                 }
                 
                 # Add metadata from the document

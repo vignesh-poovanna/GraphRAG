@@ -97,30 +97,53 @@ class Neo4jManager:
         """Import documents and chunks into Neo4j"""
         logger.info(f"Importing {len(documents)} documents with {len(chunks)} chunks to Neo4j")
         
-        # Batch processing parameters
         doc_batch_size = 50
         chunk_batch_size = 200
         
         try:
             with self.driver.session(database=self.database) as session:
-                # Import documents in batches
                 for i in range(0, len(documents), doc_batch_size):
                     batch = documents[i:i+doc_batch_size]
                     self._create_documents_batch(session, batch)
                     logger.debug(f"Imported document batch {i//doc_batch_size + 1}")
                 
-                # Import chunks in batches
                 for i in range(0, len(chunks), chunk_batch_size):
                     batch = chunks[i:i+chunk_batch_size]
                     self._create_chunks_batch(session, batch)
                     logger.debug(f"Imported chunk batch {i//chunk_batch_size + 1}")
                 
-                # Create relationships between documents based on shared category
+                # Category-based relationships — tagged via='shared_category' (D3)
                 session.run("""
                 MATCH (d1:Document), (d2:Document)
                 WHERE d1.category = d2.category AND d1.id <> d2.id
-                MERGE (d1)-[:RELATED_TO]->(d2)
+                  AND d1.category IS NOT NULL AND d1.category <> ''
+                  AND d1.category <> 'uncategorized'
+                MERGE (d1)-[r:RELATED_TO {via: 'shared_category'}]->(d2)
+                SET r.weight = 0.5
                 """)
+
+                # Manual related: frontmatter edges — tagged via='manual' (D3)
+                # Build a path→id lookup so we can resolve related filenames to doc IDs
+                path_to_id = {doc.get('path', ''): doc['id'] for doc in documents}
+                for doc in documents:
+                    related_raw = doc.get('related', [])
+                    if not related_raw:
+                        continue
+                    if isinstance(related_raw, str):
+                        related_raw = [related_raw]
+                    for rel_path in related_raw:
+                        target_id = path_to_id.get(str(rel_path))
+                        if target_id and target_id != doc['id']:
+                            session.run(
+                                """
+                                MATCH (d1:Document {id: $src})
+                                MATCH (d2:Document {id: $tgt})
+                                MERGE (d1)-[r:RELATED_TO {via: 'manual'}]->(d2)
+                                SET r.weight = 1.0
+                                """,
+                                src=doc['id'], tgt=target_id,
+                            )
+
             logger.info("Documents and chunks successfully imported to Neo4j")
             return True
         except Exception as e:
@@ -218,16 +241,29 @@ class Neo4jManager:
             return []
             
     def get_related_documents(self, doc_id, limit=5):
-        """Get related documents by category relationship"""
+        """Get related documents ordered by relationship confidence (via priority).
+        manual > shared_concepts > embedding_similarity > shared_category
+        """
         try:
             with self.driver.session(database=self.database) as session:
                 result = session.run("""
-                MATCH (d:Document {id: $id})-[:RELATED_TO]->(related:Document)
-                RETURN related
+                MATCH (d:Document {id: $id})-[r:RELATED_TO]->(related:Document)
+                WITH related, r,
+                     CASE r.via
+                       WHEN 'manual'               THEN 4
+                       WHEN 'shared_concepts'       THEN 3
+                       WHEN 'embedding_similarity'  THEN 2
+                       WHEN 'shared_category'       THEN 1
+                       ELSE 0
+                     END AS via_rank
+                RETURN related, r.via AS via, r.weight AS weight
+                ORDER BY via_rank DESC, weight DESC
                 LIMIT $limit
                 """, {'id': doc_id, 'limit': limit})
-                
-                return [dict(record['related']) for record in result]
+                return [
+                    {**dict(record['related']), 'via': record['via'], 'rel_weight': record['weight']}
+                    for record in result
+                ]
         except Exception as e:
             logger.error(f"Error getting related documents: {str(e)}")
             return []
@@ -318,3 +354,56 @@ class Neo4jManager:
         except Exception as e:
             logger.error(f"Error getting database statistics: {str(e)}")
             return {}
+
+    # ------------------------------------------------------------------
+    # Concept-graph traversal for query engine (Part B3)
+    # ------------------------------------------------------------------
+
+    def get_entities_for_chunks(self, chunk_ids):
+        """
+        Return Entity names mentioned by the given chunk IDs.
+        Uses Chunk label (HAS_CHUNK schema from import_docs.py).
+        """
+        if not chunk_ids:
+            return []
+        try:
+            with self.driver.session(database=self.database) as session:
+                result = session.run("""
+                MATCH (c:Chunk)-[:MENTIONS]->(e:Entity)
+                WHERE c.id IN $ids
+                RETURN DISTINCT e.name AS name, e.entity_type AS entity_type
+                """, {'ids': list(chunk_ids)})
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.error(f"Error getting entities for chunks: {str(e)}")
+            return []
+
+    def get_documents_for_entities(self, entity_names, exclude_doc_ids=None, limit=10):
+        """
+        Find documents that mention any of the given entities.
+        Uses Chunk/HAS_CHUNK schema (from import_docs.py).
+        """
+        if not entity_names:
+            return []
+        exclude = list(exclude_doc_ids or [])
+        try:
+            with self.driver.session(database=self.database) as session:
+                result = session.run("""
+                MATCH (e:Entity)<-[:MENTIONS]-(c:Chunk)<-[:HAS_CHUNK]-(d:Document)
+                WHERE e.name IN $names
+                  AND NOT d.id IN $exclude
+                WITH d, c, count(DISTINCT e) AS entity_overlap
+                ORDER BY entity_overlap DESC
+                WITH d, head(collect(c)) AS rep_chunk, max(entity_overlap) AS overlap
+                RETURN d.id AS doc_id,
+                       d.title AS doc_title,
+                       d.category AS doc_category,
+                       rep_chunk.id AS chunk_id,
+                       rep_chunk.text AS chunk_text,
+                       overlap
+                LIMIT $limit
+                """, {'names': list(entity_names), 'exclude': exclude, 'limit': limit})
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.error(f"Error getting documents for entities: {str(e)}")
+            return []

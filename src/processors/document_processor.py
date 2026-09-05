@@ -1,5 +1,15 @@
 """
-Document processor for parsing and chunking documents
+Document processor for parsing and chunking documents.
+
+Smart chunking strategy (CHUNKING_STRATEGY=structure_aware, default):
+  1. Split on Markdown heading boundaries (##, ###).
+  2. Protect table and code-fence blocks — never split inside them.
+  3. If a section exceeds MAX_CHUNK_SIZE, sub-split with the original
+     fixed-size+overlap logic (CHUNK_SIZE / CHUNK_OVERLAP env vars).
+  Rollback: set CHUNKING_STRATEGY=fixed to use the original behaviour.
+
+Also accepts pre-converted markdown text via process_document(text=...) so
+FormatConverter can pipe non-md files through without touching disk.
 """
 
 import re
@@ -10,166 +20,263 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+
 class DocumentProcessor:
-    """Process documents into chunks with metadata"""
-    
+    """Process documents into chunks with metadata."""
+
+    SUPPORTED_EXTENSIONS = {'.md', '.markdown', '.pdf', '.txt', '.html', '.htm', '.docx'}
+
     def __init__(self, config):
-        """Initialize with configuration"""
         self.config = config
         self.chunk_size = config.get('chunking.chunk_size', 600)
         self.chunk_overlap = config.get('chunking.chunk_overlap', 100)
-        self.supported_extensions = ['.md', '.markdown']
-    
-    def process_document(self, file_path):
-        """Process a document file into chunks with metadata"""
-        logger.info(f"Processing document: {file_path}")
-        
-        # Check if file exists and has supported extension
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Document file not found: {file_path}")
-            
-        _, ext = os.path.splitext(file_path)
-        if ext.lower() not in self.supported_extensions:
-            raise ValueError(f"Unsupported file extension: {ext}. Supported: {self.supported_extensions}")
-        
-        # Read the file
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Extract YAML front matter and content
-        metadata, text = self._extract_front_matter(content)
-        
-        # Add defaults and file path to metadata
-        metadata['path'] = file_path
+        self.strategy = config.get('chunking.strategy', 'structure_aware')
+        self.max_chunk_size = config.get('chunking.max_chunk_size', 1000)
+        self.keep_tables_atomic = config.get('chunking.keep_tables_atomic', True)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def process_document(self, file_path, text=None, source_type="md"):
+        """
+        Process a document into chunks with metadata.
+
+        Args:
+            file_path: path on disk (used for metadata; required even when text is provided).
+            text:      pre-converted Markdown string (optional). When None the file is read directly.
+            source_type: one of "md", "pdf", "txt", "html", "docx" — stored in chunk metadata.
+        """
+        logger.info("Processing document: %s", file_path)
+
+        if text is None:
+            # Direct file read path (md/markdown only — FormatConverter handles the rest)
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Document file not found: {file_path}")
+            _, ext = os.path.splitext(file_path)
+            if ext.lower() not in {'.md', '.markdown'}:
+                raise ValueError(
+                    f"Pass text= for non-markdown files or route through FormatConverter. Got: {ext}"
+                )
+            with open(file_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+
+        metadata, body = self._extract_front_matter(text)
+
+        metadata['path'] = str(file_path)
+        metadata['source_type'] = source_type
         if 'id' not in metadata:
             metadata['id'] = f"doc_{uuid.uuid4().hex[:8]}"
-        
-        # Ensure required fields
-        if 'title' not in metadata or not metadata['title']:
-            # Try to extract title from first heading or use filename
-            title = self._extract_title_from_text(text)
-            if not title:
-                title = os.path.basename(file_path)
-            metadata['title'] = title
-        
-        if 'category' not in metadata:
-            # Default category based on directory structure
-            dir_path = os.path.dirname(file_path)
+
+        if not metadata.get('title'):
+            metadata['title'] = self._extract_title_from_text(body) or os.path.basename(str(file_path))
+
+        if not metadata.get('category'):
+            dir_path = os.path.dirname(str(file_path))
             base_dir = os.path.basename(dir_path)
             metadata['category'] = base_dir if base_dir else 'uncategorized'
-        
-        # Chunk the document
-        chunks = self._chunk_text(text)
-        logger.info(f"Document chunked into {len(chunks)} parts")
-        
-        # Create chunk objects with metadata
+
+        chunks = self._chunk_text(body)
+        logger.info("Document chunked into %d parts (strategy=%s)", len(chunks), self.strategy)
+
         chunk_objects = []
-        for i, chunk_text in enumerate(chunks):
-            # Use UUID for both Neo4j and Qdrant
-            chunk_id = str(uuid.uuid4())
+        for i, (chunk_text, chunk_type) in enumerate(chunks):
             chunk_objects.append({
-                'id': chunk_id,
+                'id': str(uuid.uuid4()),
                 'text': chunk_text,
                 'doc_id': metadata['id'],
                 'position': i,
+                'chunk_type': chunk_type,
+                'source_type': source_type,
                 'metadata': metadata,
             })
-        
+
         return metadata, chunk_objects
-    
-    def _extract_front_matter(self, content):
-        """Extract YAML front matter from document content"""
-        # Match YAML front matter pattern ---\n...\n---
-        front_matter_match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
-        
-        if front_matter_match:
-            yaml_text = front_matter_match.group(1)
-            content_text = front_matter_match.group(2)
-            try:
-                metadata = yaml.safe_load(yaml_text)
-                if metadata and isinstance(metadata, dict):
-                    logger.debug(f"Extracted metadata: {metadata.keys()}")
-                    return metadata, content_text
-            except yaml.YAMLError as e:
-                logger.warning(f"Error parsing YAML front matter: {str(e)}")
-        
-        # No front matter or parsing failed, return minimal metadata
-        logger.debug("No valid front matter found, using defaults")
-        return {'title': '', 'category': ''}, content
-    
-    def _extract_title_from_text(self, text):
-        """Extract title from first heading in the document"""
-        # Look for first # heading
-        heading_match = re.search(r'^#\s+(.+)$', text, re.MULTILINE)
-        if heading_match:
-            return heading_match.group(1).strip()
-        return ''
-    
-    def _chunk_text(self, text):
-        """Split text into chunks with overlap"""
-        chunks = []
-        start = 0
-        
-        while start < len(text):
-            # Calculate end position
-            end = min(start + self.chunk_size, len(text))
-            
-            # Adjust end to nearest paragraph or sentence boundary if possible
-            if end < len(text):
-                # First try paragraph boundary
-                paragraph_boundary = text.find('\n\n', end - 100, end + 100)
-                if paragraph_boundary != -1:
-                    end = paragraph_boundary + 2  # Include the newlines
-                else:
-                    # Try sentence boundary
-                    sentence_boundary = re.search(r'[.!?]\s+', text[end-50:end+50])
-                    if sentence_boundary:
-                        # Adjust the match position to the global text
-                        end = end - 50 + sentence_boundary.end()
-            
-            # Extract chunk with adjusted boundary
-            chunk = text[start:end].strip()
-            if chunk:  # Only add non-empty chunks
-                chunks.append(chunk)
-            
-            # Move start position for next chunk, accounting for overlap
-            start = max(end - self.chunk_overlap, start + 1)  # Ensure progress
-        
-        return chunks
-    
+
     def process_directory(self, directory_path, recursive=True):
-        """Process all documents in a directory"""
-        logger.info(f"Processing directory: {directory_path} (recursive: {recursive})")
-        
-        all_docs = []
-        all_chunks = []
-        
-        # Get list of files
+        """Process all supported documents in a directory."""
+        logger.info("Processing directory: %s (recursive: %s)", directory_path, recursive)
+
+        # Import here to avoid circular import — FormatConverter is only needed
+        # for non-md files; md files go through the direct path.
+        from src.processors.format_converter import FormatConverter
+        converter = FormatConverter()
+
         files = []
         if recursive:
             for root, _, filenames in os.walk(directory_path):
                 for filename in filenames:
                     _, ext = os.path.splitext(filename)
-                    if ext.lower() in self.supported_extensions:
+                    if ext.lower() in self.SUPPORTED_EXTENSIONS:
                         files.append(os.path.join(root, filename))
         else:
             for filename in os.listdir(directory_path):
-                file_path = os.path.join(directory_path, filename)
-                if os.path.isfile(file_path):
+                fp = os.path.join(directory_path, filename)
+                if os.path.isfile(fp):
                     _, ext = os.path.splitext(filename)
-                    if ext.lower() in self.supported_extensions:
-                        files.append(file_path)
-        
-        logger.info(f"Found {len(files)} documents to process")
-        
-        # Process each file
+                    if ext.lower() in self.SUPPORTED_EXTENSIONS:
+                        files.append(fp)
+
+        logger.info("Found %d documents to process", len(files))
+
+        all_docs, all_chunks = [], []
         for file_path in files:
             try:
-                metadata, chunks = self.process_document(file_path)
+                _, ext = os.path.splitext(file_path)
+                if ext.lower() in {'.md', '.markdown'}:
+                    metadata, chunks = self.process_document(file_path, source_type="md")
+                else:
+                    md_text, source_type = converter.convert(file_path)
+                    metadata, chunks = self.process_document(file_path, text=md_text, source_type=source_type)
                 all_docs.append(metadata)
                 all_chunks.extend(chunks)
             except Exception as e:
-                logger.error(f"Error processing {file_path}: {str(e)}")
-        
-        logger.info(f"Processed {len(all_docs)} documents with {len(all_chunks)} total chunks")
-        return all_docs, all_chunks 
+                logger.error("Error processing %s: %s", file_path, e)
+
+        logger.info("Processed %d documents with %d total chunks", len(all_docs), len(all_chunks))
+        return all_docs, all_chunks
+
+    # ------------------------------------------------------------------
+    # Front matter
+    # ------------------------------------------------------------------
+
+    def _extract_front_matter(self, content):
+        m = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', content, re.DOTALL)
+        if m:
+            try:
+                meta = yaml.safe_load(m.group(1))
+                if meta and isinstance(meta, dict):
+                    return meta, m.group(2)
+            except yaml.YAMLError as e:
+                logger.warning("YAML front matter parse error: %s", e)
+        return {'title': '', 'category': ''}, content
+
+    def _extract_title_from_text(self, text):
+        m = re.search(r'^#\s+(.+)$', text, re.MULTILINE)
+        return m.group(1).strip() if m else ''
+
+    # ------------------------------------------------------------------
+    # Chunking dispatch
+    # ------------------------------------------------------------------
+
+    def _chunk_text(self, text):
+        """Returns list of (chunk_text, chunk_type) tuples."""
+        if self.strategy == 'fixed':
+            return [(c, 'text') for c in self._fixed_chunks(text)]
+        return self._structure_aware_chunks(text)
+
+    # ------------------------------------------------------------------
+    # Structure-aware chunker
+    # ------------------------------------------------------------------
+
+    def _structure_aware_chunks(self, text):
+        """
+        Line-walk state machine:
+        - Tracks whether we're inside a code fence or table block.
+        - Flushes the current section on a new ## / ### heading.
+        - Marks code and table sections with their chunk_type.
+        - Sub-splits oversized text sections using fixed-size logic.
+        """
+        lines = text.splitlines(keepends=True)
+        chunks = []
+        current_lines = []
+        current_type = 'text'   # type of the *current* section being built
+        in_code = False
+        in_table = False
+
+        def flush(buf, kind):
+            """Emit buf as one or more chunks of the given kind."""
+            body = "".join(buf).strip()
+            if not body:
+                return
+            if kind == 'text' and len(body) > self.max_chunk_size:
+                for sub in self._fixed_chunks(body):
+                    if sub.strip():
+                        chunks.append((sub, 'text'))
+            else:
+                chunks.append((body, kind))
+
+        for line in lines:
+            stripped = line.strip()
+
+            # --- code fence toggle ---
+            if stripped.startswith("```"):
+                if not in_code:
+                    # Starting a code block: flush preceding text, start code section
+                    flush(current_lines, current_type)
+                    current_lines = [line]
+                    current_type = 'code'
+                    in_code = True
+                else:
+                    # Closing the code block: include closing fence, flush
+                    current_lines.append(line)
+                    flush(current_lines, 'code')
+                    current_lines = []
+                    current_type = 'text'
+                    in_code = False
+                continue
+
+            if in_code:
+                current_lines.append(line)
+                continue
+
+            # --- table detection ---
+            is_table_line = stripped.startswith("|")
+            if is_table_line and not in_table:
+                # Starting a table: flush preceding text
+                flush(current_lines, current_type)
+                current_lines = [line]
+                current_type = 'table'
+                in_table = True
+                continue
+            if not is_table_line and in_table:
+                # Table ended
+                flush(current_lines, 'table')
+                current_lines = []
+                current_type = 'text'
+                in_table = False
+                # Fall through to process this non-table line normally
+
+            if in_table:
+                current_lines.append(line)
+                continue
+
+            # --- heading detection (## or ###) ---
+            if re.match(r'^#{2,}\s+', stripped):
+                flush(current_lines, current_type)
+                current_lines = [line]
+                current_type = 'text'
+                continue
+
+            current_lines.append(line)
+
+        # Flush whatever remains
+        flush(current_lines, current_type)
+
+        return chunks if chunks else [("", "text")]
+
+    # ------------------------------------------------------------------
+    # Fixed-size chunker (original logic, kept as sub-split + rollback)
+    # ------------------------------------------------------------------
+
+    def _fixed_chunks(self, text):
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = min(start + self.chunk_size, len(text))
+            if end < len(text):
+                pb = text.find('\n\n', max(start, end - 100), end + 100)
+                if pb != -1:
+                    end = pb + 2
+                else:
+                    sb = re.search(r'[.!?]\s+', text[max(start, end - 50):end + 50])
+                    if sb:
+                        end = max(start, end - 50) + sb.end()
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            if end >= len(text):
+                break
+            start = max(end - self.chunk_overlap, start + 1)
+        return chunks

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Import Markdown documents into the hybrid Neo4j/Qdrant database system.
+Import documents into the hybrid Neo4j/Qdrant database system.
 
-This script processes markdown documents, extracts their content and metadata,
-creates chunks, and imports them into both Neo4j and Qdrant databases.
+Supports: .md, .pdf, .txt, .html, .htm, .docx
+Non-markdown files are normalised to Markdown via FormatConverter before
+being handed to the existing document_processor pipeline.
 """
 
 import os
@@ -20,6 +21,7 @@ from src.database.neo4j_manager import Neo4jManager
 from src.database.qdrant_manager import QdrantManager
 from src.processors.document_processor import DocumentProcessor
 from src.processors.embedding_processor import EmbeddingProcessor
+from src.processors.format_converter import FormatConverter
 
 # Configure logging
 logging.basicConfig(
@@ -50,7 +52,7 @@ def setup_argparse():
         '--docs-dir', '-d',
         type=str,
         default='your_docs_here',
-        help='Directory containing markdown documents to import'
+        help='Directory containing documents to import (.md, .pdf, .txt, .html, .docx)'
     )
     
     parser.add_argument(
@@ -152,19 +154,48 @@ def main():
             logger.error(f"Documents directory does not exist: {docs_dir}")
             return 1
         
-        # Create document processor
+        # Create document processor and format converter
         document_processor = DocumentProcessor(config)
-        
-        # Process documents
-        logger.info(f"Processing documents from {docs_dir} (recursive: {args.recursive})")
-        documents, chunks = document_processor.process_directory(
-            docs_dir, 
-            recursive=args.recursive
-        )
-        
-        if not documents or not chunks:
-            logger.warning("No documents or chunks found to import")
+        converter = FormatConverter()
+
+        # Walk directory for all supported file types
+        supported = DocumentProcessor.SUPPORTED_EXTENSIONS
+        files = []
+        if args.recursive:
+            for root, _, filenames in os.walk(docs_dir):
+                for fn in filenames:
+                    _, ext = os.path.splitext(fn)
+                    if ext.lower() in supported:
+                        files.append(os.path.join(root, fn))
+        else:
+            for fn in os.listdir(docs_dir):
+                fp = os.path.join(docs_dir, fn)
+                if os.path.isfile(fp):
+                    _, ext = os.path.splitext(fn)
+                    if ext.lower() in supported:
+                        files.append(fp)
+
+        if not files:
+            logger.warning("No supported documents found in %s", docs_dir)
             return 0
+
+        logger.info("Found %d files to process", len(files))
+
+        documents, chunks = [], []
+        for fp in files:
+            try:
+                _, ext = os.path.splitext(fp)
+                if ext.lower() in {'.md', '.markdown'}:
+                    meta, file_chunks = document_processor.process_document(fp, source_type="md")
+                else:
+                    md_text, source_type = converter.convert(fp)
+                    meta, file_chunks = document_processor.process_document(
+                        fp, text=md_text, source_type=source_type
+                    )
+                documents.append(meta)
+                chunks.extend(file_chunks)
+            except Exception as e:
+                logger.error("Error processing %s: %s", fp, e)
         
         # Import documents and chunks into Neo4j
         logger.info(f"Importing {len(documents)} documents with {len(chunks)} chunks into Neo4j")

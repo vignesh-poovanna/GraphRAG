@@ -19,4 +19,10 @@ numpy>=1.24.0
 tqdm>=4.65.0
 requests>=2.31.0
 python-dateutil>=2.8.2
-uuid>=1.30 
+uuid>=1.30
+
+# Optional ingestion deps (install only what you need)
+# pip install docling          # PDF -> Markdown (IBM Docling, fully local)
+# pip install markitdown       # DOCX -> Markdown (Microsoft MarkItDown)
+# pip install trafilatura      # HTML boilerplate stripping -> Markdown
+# pip install ollama           # Ollama Python client (Parts B/C) — required for extract_concepts.py

@@ -8,6 +8,8 @@ from src.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 import logging
 from typing import Dict, Any, List
 
+logger = logging.getLogger(__name__)
+
 class Neo4jHelper:
     """Helper class for Neo4j operations."""
     
@@ -151,22 +153,19 @@ class Neo4jHelper:
             result = session.run(query, doc_id=doc_id, topic_name=topic_name)
             return result.single()
     
-    def link_documents(self, source_doc_id, target_doc_id, rel_type="RELATED_TO"):
+    def link_documents(self, source_doc_id, target_doc_id, rel_type="RELATED_TO", via="manual", weight=1.0):
         """
         Create a relationship between two Document nodes.
-        
-        Args:
-            source_doc_id: Source document ID
-            target_doc_id: Target document ID
-            rel_type: Relationship type (default: RELATED_TO)
+        via: provenance tag — "manual" | "shared_category" | "shared_concepts" | "embedding_similarity"
         """
         query = f"""
         MATCH (d1:Document {{id: $source_id}})
         MATCH (d2:Document {{id: $target_id}})
-        MERGE (d1)-[:{rel_type}]->(d2)
+        MERGE (d1)-[r:{rel_type}]->(d2)
+        SET r.via = $via, r.weight = $weight
         """
         with self.driver.session() as session:
-            session.run(query, source_id=source_doc_id, target_id=target_doc_id)
+            session.run(query, source_id=source_doc_id, target_id=target_doc_id, via=via, weight=weight)
     
     def get_document_chunks(self, doc_id):
         """Get all content chunks for a document."""
@@ -287,4 +286,145 @@ class Neo4jHelper:
             result = session.run("MATCH ()-[r]->() RETURN count(r) as count")
             stats['relationship_count'] = result.single()["count"]
             
-        return stats 
+        return stats
+
+    # ------------------------------------------------------------------
+    # Entity / concept graph (Part B1) — pure additions, no existing
+    # method signatures changed.
+    # ------------------------------------------------------------------
+
+    def create_entity(self, name, entity_type=None):
+        """MERGE an Entity node by name. entity_type is optional metadata."""
+        query = """
+        MERGE (e:Entity {name: $name})
+        SET e.entity_type = $entity_type
+        RETURN e
+        """
+        with self.driver.session() as session:
+            return session.run(query, name=name, entity_type=entity_type or "").single()
+
+    def link_chunk_to_entity(self, chunk_id, entity_name):
+        """Create (:Content)-[:MENTIONS]->(:Entity). Idempotent via MERGE."""
+        query = """
+        MATCH (c:Content {id: $chunk_id})
+        MERGE (e:Entity {name: $entity_name})
+        MERGE (c)-[:MENTIONS]->(e)
+        """
+        with self.driver.session() as session:
+            session.run(query, chunk_id=chunk_id, entity_name=entity_name)
+
+    def link_entities(self, entity_a, entity_b, rel_type="RELATED_TO", weight=1.0):
+        """Create a weighted (:Entity)-[:RELATED_TO]->(:Entity) edge. Idempotent."""
+        # rel_type validated against allowlist to prevent Cypher injection
+        allowed = {"RELATED_TO", "PART_OF"}
+        if rel_type not in allowed:
+            rel_type = "RELATED_TO"
+        query = (
+            "MERGE (a:Entity {name: $a}) "
+            "MERGE (b:Entity {name: $b}) "
+            "MERGE (a)-[r:" + rel_type + "]->(b) "
+            "SET r.weight = $weight "
+            "RETURN r"
+        )
+        with self.driver.session() as session:
+            return session.run(query, a=entity_a, b=entity_b, weight=weight).single()
+
+    def get_related_entities(self, entity_name, depth=1):
+        """Traverse RELATED_TO up to `depth` hops from an entity."""
+        query = """
+        MATCH (e:Entity {name: $name})-[:RELATED_TO*1..$depth]-(related:Entity)
+        RETURN DISTINCT related.name AS name, related.entity_type AS entity_type
+        """
+        with self.driver.session() as session:
+            result = session.run(query, name=entity_name, depth=depth)
+            return [dict(r) for r in result]
+
+    def get_documents_for_entity(self, entity_name):
+        """Find all documents that have chunks mentioning the given entity."""
+        query = """
+        MATCH (d:Document)-[:CONTAINS]->(c:Content)-[:MENTIONS]->(e:Entity {name: $name})
+        RETURN DISTINCT d.id AS id, d.title AS title, d.category AS category
+        """
+        with self.driver.session() as session:
+            result = session.run(query, name=entity_name)
+            return [dict(r) for r in result]
+
+    def auto_link_related_documents(
+        self, min_shared_concepts=2, threshold=0.75, doc_embeddings=None
+    ):
+        """
+        Auto-discover and link related documents via two mechanisms (D2):
+
+        1. Concept-overlap: pairs sharing >= min_shared_concepts entities get a
+           RELATED_TO edge tagged via="shared_concepts".
+        2. Embedding-similarity: if doc_embeddings {doc_id: np.array} is provided,
+           pairs with cosine similarity >= threshold get a RELATED_TO edge tagged
+           via="embedding_similarity".
+
+        Both checks are idempotent (MERGE). Manually-authored edges (via="manual")
+        are untouched — they carry higher implicit confidence.
+        """
+        linked = {"shared_concepts": 0, "embedding_similarity": 0}
+
+        # --- 1. Concept-overlap ---
+        cypher = """
+        MATCH (d1:Document)-[:HAS_CHUNK]->(c1:Chunk)-[:MENTIONS]->(e:Entity)
+              <-[:MENTIONS]-(c2:Chunk)<-[:HAS_CHUNK]-(d2:Document)
+        WHERE d1.id < d2.id
+        WITH d1, d2, count(DISTINCT e) AS shared
+        WHERE shared >= $min_shared
+        MERGE (d1)-[r:RELATED_TO {via: "shared_concepts"}]->(d2)
+        SET r.weight = shared
+        RETURN count(r) AS n
+        """
+        with self.driver.session() as session:
+            row = session.run(cypher, min_shared=min_shared_concepts).single()
+            linked["shared_concepts"] = row["n"] if row else 0
+
+        # --- 2. Embedding-similarity ---
+        if doc_embeddings and len(doc_embeddings) > 1:
+            try:
+                import numpy as np  # already a core dep
+
+                ids = list(doc_embeddings.keys())
+                vecs = np.array([doc_embeddings[i] for i in ids], dtype=float)
+                # L2-normalise for cosine similarity via dot product
+                norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+                norms[norms == 0] = 1.0
+                vecs = vecs / norms
+
+                with self.driver.session() as session:
+                    for i in range(len(ids)):
+                        for j in range(i + 1, len(ids)):
+                            sim = float(np.dot(vecs[i], vecs[j]))
+                            if sim >= threshold:
+                                session.run(
+                                    """
+                                    MATCH (d1:Document {id: $a})
+                                    MATCH (d2:Document {id: $b})
+                                    MERGE (d1)-[r:RELATED_TO {via: "embedding_similarity"}]->(d2)
+                                    SET r.weight = $sim
+                                    """,
+                                    a=ids[i], b=ids[j], sim=sim,
+                                )
+                                linked["embedding_similarity"] += 1
+            except Exception as exc:
+                logger.warning("Embedding-similarity linking failed: %s", exc)
+
+        logger.info(
+            "auto_link_related_documents: shared_concepts=%d  embedding_similarity=%d",
+            linked["shared_concepts"], linked["embedding_similarity"],
+        )
+        return linked
+
+    def update_document_category(self, doc_id, category):
+        """Update a document's category if it is currently 'uncategorized'."""
+        with self.driver.session() as session:
+            session.run(
+                """
+                MATCH (d:Document {id: $id})
+                WHERE d.category = 'uncategorized' OR d.category IS NULL OR d.category = ''
+                SET d.category = $category
+                """,
+                id=doc_id, category=category,
+            )

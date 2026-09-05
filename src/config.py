@@ -35,7 +35,10 @@ class Config:
             },
             "chunking": {
                 "chunk_size": int(os.getenv("CHUNK_SIZE", 600)),
-                "chunk_overlap": int(os.getenv("CHUNK_OVERLAP", 100))
+                "chunk_overlap": int(os.getenv("CHUNK_OVERLAP", 100)),
+                "strategy": os.getenv("CHUNKING_STRATEGY", "structure_aware"),  # "fixed" | "structure_aware"
+                "max_chunk_size": int(os.getenv("MAX_CHUNK_SIZE", 1000)),
+                "keep_tables_atomic": os.getenv("KEEP_TABLES_ATOMIC", "true").lower() == "true",
             }
         }
         
@@ -111,4 +114,8 @@ QDRANT_PORT = config.get('qdrant.port')
 QDRANT_COLLECTION = config.get('qdrant.collection')
 
 EMBEDDING_MODEL = config.get('embedding.model')
-EMBEDDING_DIMENSION = config.get('embedding.dimension') 
+EMBEDDING_DIMENSION = config.get('embedding.dimension')
+
+CHUNKING_STRATEGY = config.get('chunking.strategy')
+MAX_CHUNK_SIZE = config.get('chunking.max_chunk_size')
+KEEP_TABLES_ATOMIC = config.get('chunking.keep_tables_atomic')
