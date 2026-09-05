@@ -245,6 +245,22 @@ After setup, verify database connections:
 python test_db_connection/test_connections.py
 ```
 
+## Visualizing Vector Database & Knowledge Graph
+
+For documentation, system understanding, and interactive reference:
+
+1. **Interactive Dual Visualizer (2D/3D Vector Space + Knowledge Graph)**:
+   - Open [visualizations/graphrag_visualizer.html](visualizations/graphrag_visualizer.html) in any web browser.
+   - Regenerate anytime after importing documents:
+     ```bash
+     python scripts/generate_visualizations.py
+     ```
+2. **Native Database UIs**:
+   - **Neo4j Browser**: [http://localhost:7474](http://localhost:7474) (Auth: `neo4j` / `password`)
+   - **Qdrant Dashboard**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+3. **Comprehensive Guide**:
+   - See [docs/visualization_guide.md](docs/visualization_guide.md) for curated Cypher queries, aesthetic screenshot presets, and schema reference.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

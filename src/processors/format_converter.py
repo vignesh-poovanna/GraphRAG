@@ -62,14 +62,42 @@ class FormatConverter:
     # ------------------------------------------------------------------
 
     def _convert_pdf(self, filepath):
+        md = ""
+        # 1. Try pymupdf4llm (extracts rich Markdown, tables, headings, and images)
         try:
-            from docling.document_converter import DocumentConverter as DoclingConverter  # type: ignore
-            converter = DoclingConverter()
-            result = converter.convert(str(filepath))
-            md = result.document.export_to_markdown()
+            import pymupdf4llm
+            md = pymupdf4llm.to_markdown(str(filepath))
+            logger.info("Converted PDF %s via pymupdf4llm (%d chars)", filepath, len(md))
         except ImportError:
-            logger.warning("docling not installed; falling back to raw text for PDF")
-            md = self._raw_fallback(filepath)
+            logger.debug("pymupdf4llm not installed; checking other converters")
+        except Exception as exc:
+            logger.warning("pymupdf4llm failed for %s: %s", filepath, exc)
+
+        # 2. Try docling if pymupdf4llm did not produce text
+        if not md:
+            try:
+                from docling.document_converter import DocumentConverter as DoclingConverter  # type: ignore
+                converter = DoclingConverter()
+                result = converter.convert(str(filepath))
+                md = result.document.export_to_markdown()
+                logger.info("Converted PDF %s via docling (%d chars)", filepath, len(md))
+            except ImportError:
+                logger.debug("docling not installed")
+            except Exception as exc:
+                logger.warning("docling failed for %s: %s", filepath, exc)
+
+        # 3. Try pypdf text extraction fallback
+        if not md:
+            try:
+                import pypdf
+                reader = pypdf.PdfReader(str(filepath))
+                pages = [page.extract_text() or "" for page in reader.pages]
+                md = "\n\n".join(pages).strip()
+                logger.info("Extracted text from PDF %s via pypdf (%d chars)", filepath, len(md))
+            except Exception as exc:
+                logger.error("All PDF converters failed for %s: %s", filepath, exc)
+                md = ""
+
         return self._ensure_frontmatter(md, filepath)
 
     def _convert_txt(self, filepath):
@@ -115,14 +143,33 @@ class FormatConverter:
         if self._FM_RE.match(md):
             return md
         title = self._extract_title(md) or Path(filepath).stem.replace("_", " ").replace("-", " ").title()
-        fm = "---\ntitle: \"{title}\"\ncategory: uncategorized\n---\n\n".format(title=title)
+        
+        # Infer meaningful category from stem/path
+        stem = Path(filepath).stem.lower()
+        if any(k in stem for k in ("launch", "deploy")):
+            category = "operations/launch"
+        elif any(k in stem for k in ("telemetry", "anomaly")):
+            category = "operations/telemetry"
+        elif any(k in stem for k in ("ground", "station")):
+            category = "operations/ground_station"
+        elif any(k in stem for k in ("obc", "computer")):
+            category = "subsystems/obc"
+        else:
+            category = "general"
+
+        fm = f"---\ntitle: \"{title}\"\ncategory: {category}\n---\n\n"
         return fm + md
 
     @staticmethod
     def _extract_title(md):
-        """Pull title from first # heading."""
+        """Pull title from first # heading, cleaning markdown bold/italic syntax."""
         m = re.search(r"^#\s+(.+)$", md, re.MULTILINE)
-        return m.group(1).strip() if m else ""
+        if m:
+            title = m.group(1).strip()
+            # Clean markdown bold/italic/backtick artifacts
+            title = re.sub(r"[*_`#]", "", title).strip()
+            return title
+        return ""
 
     # ------------------------------------------------------------------
     # Fallbacks

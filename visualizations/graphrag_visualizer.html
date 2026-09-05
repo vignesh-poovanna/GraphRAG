@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GraphRAG Visualizer | Vector Space & Knowledge Graph</title>
+  <!-- Google Fonts & CDN Libraries -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-card: rgba(18, 24, 38, 0.75);
+      --bg-card-border: rgba(255, 255, 255, 0.08);
+      --accent-cyan: #00f2fe;
+      --accent-blue: #4facfe;
+      --accent-purple: #9d4edd;
+      --accent-gold: #f59e0b;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(79, 172, 254, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(157, 78, 221, 0.08) 0%, transparent 40%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    header {
+      background: rgba(10, 15, 29, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--bg-card-border);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .logo-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(0, 242, 254, 0.3);
+    }
+
+    .brand-title h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-title p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    /* Quick stats header chips */
+    .stat-pills {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--bg-card-border);
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .pill-val {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .dot-cyan { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); }
+    .dot-purple { background: var(--accent-purple); box-shadow: 0 0 8px var(--accent-purple); }
+    .dot-gold { background: var(--accent-gold); box-shadow: 0 0 8px var(--accent-gold); }
+
+    /* Navigation Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.75rem 2rem 0;
+      background: rgba(13, 19, 33, 0.5);
+      border-bottom: 1px solid var(--bg-card-border);
+    }
+
+    .tab-btn {
+      padding: 0.65rem 1.25rem;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+    }
+
+    .tab-btn.active {
+      color: var(--accent-cyan);
+      border-bottom: 2px solid var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* Main Content Container */
+    main {
+      flex: 1;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .tab-panel {
+      display: none;
+      flex-direction: column;
+      gap: 1.25rem;
+      height: 100%;
+    }
+
+    .tab-panel.active {
+      display: flex;
+    }
+
+    /* Controls Toolbar */
+    .toolbar {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 12px;
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .control-label {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.45rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.2));
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    select, input[type="text"] {
+      background: rgba(10, 15, 29, 0.8);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    /* Viewer Stage & Drawer Layout */
+    .stage-container {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.25rem;
+      height: 720px;
+    }
+
+    .viewport-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #vector-plot, #graph-canvas {
+      width: 100%;
+      height: 100%;
+      flex: 1;
+    }
+
+    /* Detail Drawer */
+    .detail-drawer {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-y: auto;
+    }
+
+    .detail-drawer h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .drawer-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      gap: 0.75rem;
+    }
+
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .detail-item .key {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .detail-item .val {
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      word-break: break-word;
+    }
+
+    .text-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      max-height: 250px;
+      overflow-y: auto;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    /* Architecture / Duality Tab */
+    .duality-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .duality-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .duality-card.vector-side {
+      border-top: 4px solid var(--accent-cyan);
+    }
+
+    .duality-card.graph-side {
+      border-top: 4px solid var(--accent-purple);
+    }
+
+    .card-badge {
+      display: inline-block;
+      align-self: flex-start;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-vector {
+      background: rgba(0, 242, 254, 0.15);
+      color: var(--accent-cyan);
+    }
+
+    .badge-graph {
+      background: rgba(157, 78, 221, 0.15);
+      color: var(--accent-purple);
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+
+    .feature-list li::before {
+      content: "✦";
+      color: var(--accent-cyan);
+    }
+    .graph-side .feature-list li::before {
+      color: var(--accent-purple);
+    }
+
+    /* Legend */
+    .legend-box {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: rgba(10, 15, 29, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 10px;
+      padding: 0.6rem 0.9rem;
+      display: flex;
+      gap: 1rem;
+      font-size: 0.75rem;
+      z-index: 10;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .legend-circle {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-badge">GR</div>
+      <div class="brand-title">
+        <h1>GraphRAG Hybrid Visualizer</h1>
+        <p>Qdrant Vector Database + Neo4j Knowledge Graph (CubeSat Knowledge Base)</p>
+      </div>
+    </div>
+    
+    <div class="stat-pills">
+      <div class="pill">
+        <span class="dot dot-cyan"></span>
+        Vectors: <span class="pill-val">87</span>
+      </div>
+      <div class="pill">
+        <span class="dot dot-gold"></span>
+        Documents: <span class="pill-val">12</span>
+      </div>
+      <div class="pill">
+        <span class="dot dot-purple"></span>
+        Entities: <span class="pill-val">38</span>
+      </div>
+      <div class="pill">
+        Relations: <span class="pill-val">252</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('vector')">
+      <span>🌌</span> Vector Space (Qdrant)
+    </button>
+    <button class="tab-btn" onclick="switchTab('graph')">
+      <span>🕸️</span> Knowledge Graph (Neo4j)
+    </button>
+    <button class="tab-btn" onclick="switchTab('duality')">
+      <span>⚡</span> GraphRAG Duality Explained
+    </button>
+    <button class="tab-btn" onclick="switchTab('portals')">
+      <span>🔌</span> Database Portals & Cypher Queries
+    </button>
+  </div>
+
+  <!-- Main Viewports -->
+  <main>
+
+    <!-- 1. VECTOR SPACE TAB -->
+    <section id="tab-vector" class="tab-panel active">
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <span class="control-label">Projection Mode:</span>
+          <button id="btn-2d" class="btn active" onclick="setVectorDim('2d')">2D t-SNE (Non-linear)</button>
+          <button id="btn-3d" class="btn" onclick="setVectorDim('3d')">3D PCA (Variance Maximized)</button>
+        </div>
+
+        <div class="toolbar-group">
+          <span class="control-label">Color By:</span>
+          <select id="vector-color-select" onchange="updateVectorPlot()">
+            <option value="title">Document Source</option>
+            <option value="category">Category</option>
+          </select>
+        </div>
+
+        <div class="toolbar-group">
+          <input type="text" id="vector-search" placeholder="Filter by keyword..." oninput="filterVectorPoints(this.value)" />
+          <button class="btn" onclick="resetVectorView()">Reset Zoom</button>
+        </div>
+      </div>
+
+      <div class="stage-container">
+        <div class="viewport-card">
+          <div id="vector-plot"></div>
+        </div>
+
+        <div class="detail-drawer" id="vector-drawer">
+          <h3><span>📍</span> Chunk Inspector</h3>
+          <div id="vector-drawer-content" class="drawer-empty">
+            <p>Hover or click any point in the scatter plot to inspect its semantic payload.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. KNOWLEDGE GRAPH TAB -->
+    <section id="tab-graph" class="tab-panel">
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <span class="control-label">Filter View:</span>
+          <button class="btn active" id="filter-all" onclick="filterGraph('all')">Complete Graph</button>
+          <button class="btn" id="filter-entities" onclick="filterGraph('entities')">Entity Knowledge Graph (Ontology)</button>
+          <button class="btn" id="filter-docs" onclick="filterGraph('docs')">Document Hierarchy</button>
+        </div>
+
+        <div class="toolbar-group">
+          <span class="control-label">Physics:</span>
+          <button id="btn-physics" class="btn active" onclick="togglePhysics()">Stabilize</button>
+          <button class="btn" onclick="fitGraph()">Fit Graph</button>
+        </div>
+
+        <div class="toolbar-group">
+          <input type="text" id="graph-search" placeholder="Search entity/doc..." oninput="searchGraph(this.value)" />
+        </div>
+      </div>
+
+      <div class="stage-container">
+        <div class="viewport-card">
+          <div id="graph-canvas"></div>
+          <div class="legend-box">
+            <div class="legend-item"><span class="legend-circle" style="background:#f59e0b"></span> Document (12)</div>
+            <div class="legend-item"><span class="legend-circle" style="background:#00f2fe"></span> Chunk (371)</div>
+            <div class="legend-item"><span class="legend-circle" style="background:#ec4899"></span> Entity (48)</div>
+          </div>
+        </div>
+
+        <div class="detail-drawer" id="graph-drawer">
+          <h3><span>🔍</span> Node Inspector</h3>
+          <div id="graph-drawer-content" class="drawer-empty">
+            <p>Click on any node or edge in the network to inspect properties and relationships.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DUALITY EXPLAINED TAB -->
+    <section id="tab-duality" class="tab-panel">
+      <div class="duality-grid">
+        <div class="duality-card vector-side">
+          <span class="card-badge badge-vector">Vector Database (Qdrant)</span>
+          <h2>Latent Semantic Search</h2>
+          <p style="color: var(--text-muted); font-size: 0.95rem;">
+            Vector embeddings capture fuzzy conceptual similarity across 384 dimensions using cosine distance.
+          </p>
+          <ul class="feature-list">
+            <li><strong>Strength:</strong> Finds relevant passages even when phrasing, synonyms, or vocabulary differ completely.</li>
+            <li><strong>CubeSat Example:</strong> Querying <em>"power loss during eclipse"</em> retrieves battery discharge specs even if the word "blackout" was never indexed.</li>
+            <li><strong>Blind Spot:</strong> Disconnected from structure—cannot traverse sequential chunks (what happened next) or find 2-hop entity relationships.</li>
+          </ul>
+        </div>
+
+        <div class="duality-card graph-side">
+          <span class="card-badge badge-graph">Knowledge Graph (Neo4j)</span>
+          <h2>Symbolic Relational Context</h2>
+          <p style="color: var(--text-muted); font-size: 0.95rem;">
+            Explicit graph nodes connected by typed edges (<code>HAS_CHUNK</code>, <code>NEXT</code>, <code>MENTIONS</code>, <code>RELATED_TO</code>).
+          </p>
+          <ul class="feature-list">
+            <li><strong>Strength:</strong> Multi-hop reasoning, strict chronological reading via <code>NEXT</code> edges, and domain ontology.</li>
+            <li><strong>CubeSat Example:</strong> Knowing that <em>Solar Panels</em> are related to <em>Power Subsystem</em>, which connects to <em>Battery Chemistry</em>.</li>
+            <li><strong>Synergy:</strong> Qdrant retrieves the seed entry point; Neo4j expands the surrounding neighborhood for hallucination-free generation!</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="duality-card" style="background: rgba(18, 24, 38, 0.5);">
+        <h2>Retriever Synergy Pipeline</h2>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #a5f3fc; line-height: 1.8; background: rgba(0,0,0,0.3); padding: 1.25rem; border-radius: 10px;">
+          1. User Query: "What happens if battery voltage drops below threshold in safe mode?"<br/>
+          2. Qdrant Vector Search -> Returns top 3 candidate Chunks [chk_12, chk_45, chk_88] via Cosine Proximity.<br/>
+          3. Neo4j Graph Traversal -> Expands [chk_12] -[:NEXT]-> [chk_13] (continuation paragraph) and -[:MENTIONS]-> (Entity: Safe Mode) -[:RELATED_TO]-> (Entity: ADCS).<br/>
+          4. LLM Synthesis -> Synthesizes exact procedure with both semantic nuance AND complete chronological context.
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. DATABASE PORTALS & QUERIES TAB -->
+    <section id="tab-portals" class="tab-panel">
+      <div class="duality-grid">
+        <div class="duality-card">
+          <h2>Neo4j Browser & Cypher Queries</h2>
+          <p style="color: var(--text-muted); font-size: 0.88rem;">
+            Access the native Neo4j Browser UI at <a href="http://localhost:7474" target="_blank" style="color:var(--accent-cyan);">http://localhost:7474</a> (Auth: <code>neo4j</code> / <code>password</code>).
+          </p>
+          <div style="display:flex; flex-direction:column; gap: 0.75rem;">
+            <div style="background:rgba(0,0,0,0.35); padding:0.85rem; border-radius:8px; border:1px solid var(--bg-card-border);">
+              <span style="font-size:0.75rem; color:var(--accent-purple); font-weight:600;">Entity Ontology Graph</span>
+              <div style="font-family:'JetBrains Mono'; font-size:0.78rem; color:#cbd5e1; margin-top:0.3rem;">
+                MATCH (e1:Entity)-[r:RELATED_TO]->(e2:Entity) RETURN e1, r, e2;
+              </div>
+            </div>
+            <div style="background:rgba(0,0,0,0.35); padding:0.85rem; border-radius:8px; border:1px solid var(--bg-card-border);">
+              <span style="font-size:0.75rem; color:var(--accent-gold); font-weight:600;">Document Hierarchy</span>
+              <div style="font-family:'JetBrains Mono'; font-size:0.78rem; color:#cbd5e1; margin-top:0.3rem;">
+                MATCH (d:Document)-[r:HAS_CHUNK]->(c:Chunk) RETURN d, r, c LIMIT 50;
+              </div>
+            </div>
+            <div style="background:rgba(0,0,0,0.35); padding:0.85rem; border-radius:8px; border:1px solid var(--bg-card-border);">
+              <span style="font-size:0.75rem; color:var(--accent-cyan); font-weight:600;">Sequential Chunk Reading Chain</span>
+              <div style="font-family:'JetBrains Mono'; font-size:0.78rem; color:#cbd5e1; margin-top:0.3rem;">
+                MATCH (c1:Chunk)-[r:NEXT]->(c2:Chunk) RETURN c1, r, c2 LIMIT 50;
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="duality-card">
+          <h2>Qdrant Web UI & Metrics</h2>
+          <p style="color: var(--text-muted); font-size: 0.88rem;">
+            Access the native Qdrant Dashboard at <a href="http://localhost:6333/dashboard" target="_blank" style="color:var(--accent-cyan);">http://localhost:6333/dashboard</a>.
+          </p>
+          <div style="display:flex; flex-direction:column; gap: 0.75rem;">
+            <div style="background:rgba(0,0,0,0.35); padding:0.85rem; border-radius:8px; border:1px solid var(--bg-card-border);">
+              <span style="font-size:0.75rem; color:var(--accent-cyan); font-weight:600;">Collection: document_chunks</span>
+              <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.3rem;">
+                Points: <code>371</code> | Dimensions: <code>384</code> (Model: <code>all-MiniLM-L6-v2</code>) | Metric: <code>Cosine</code>
+              </p>
+            </div>
+            <div style="background:rgba(0,0,0,0.35); padding:0.85rem; border-radius:8px; border:1px solid var(--bg-card-border);">
+              <span style="font-size:0.75rem; color:#10b981; font-weight:600;">Metadata Payload Fields</span>
+              <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.3rem;">
+                <code>title</code>, <code>category</code>, <code>doc_id</code>, <code>chunk_type</code>, <code>position</code>, <code>text</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Embedded Data
+    const DATA = {"vector_points": [{"id": "01ad9296-f993-4760-b980-429e982e3107", "title": "Power Subsystem", "category": "subsystems/power", "doc_id": "doc_4969e6d2", "chunk_type": "text", "position": 0, "text": "# Power Subsystem\n\nThe power subsystem is responsible for generating, storing, conditioning, and distributing electrical energy to every other subsystem on a CubeSat. It is usually the first subsystem sized during mission design, because nearly every other capability \u2014 payload duty cycle, downlink frequency, propulsion firing time \u2014 is ultimately constrained by how much power is available.", "x2d": -7.1668620109558105, "y2d": -10.990836143493652, "x3d": -0.04595993459224701, "y3d": 0.4603841304779053, "z3d": 0.24873459339141846}, {"id": "0762c2fd-6a9c-4f72-b49c-09c0c9c5edaf", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 5, "text": "### Document Structure\n\n- Start with a single `# Title` (H1) heading after the front matter\n- Use proper heading hierarchy (`##`, `###`, etc.)\n- Include code blocks with language identifiers\n- Use lists, tables, and other markdown features as needed\n- Link to related documents where appropriate", "x2d": 10.43817138671875, "y2d": 40.163856506347656, "x3d": 0.6654557585716248, "y3d": 0.007490471005439758, "z3d": -0.09330654889345169}, {"id": "0c2b611c-f37e-42f6-9cd5-9bcffa39a5f1", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "table", "position": 5, "text": "|", "x2d": 8.900303840637207, "y2d": 24.502788543701172, "x3d": 0.3717353343963623, "y3d": -0.10140655189752579, "z3d": -0.06731322407722473}, {"id": "0d2aea0d-f7f7-449a-879e-811da38dea8a", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "text", "position": 4, "text": "e spacecraft using reaction wheels, magnetorquers, and sensors like gyroscopes and star trackers, which matters for pointing solar panels at the sun, antennas at the ground, and payloads at their targets.\n\n**Communications** handles uplink commands and downlink data over RF links in bands like UHF, VHF, or S-band, and its performance is governed by the link budget between the spacecraft and the gr", "x2d": -12.885766983032227, "y2d": -21.828886032104492, "x3d": -0.2374785840511322, "y3d": 0.2367529720067978, "z3d": -0.13254009187221527}, {"id": "123a0d31-3ed3-47a2-b1f2-010ea90e352d", "title": "Communications Subsystem", "category": "general", "doc_id": "doc_a32152bc", "chunk_type": "text", "position": 1, "text": "uch more telemetry and payload data there typically is to send home compared to commands going up.\n\nFrequency band choice shapes almost everything else about the radio design. UHF and VHF bands are popular on smaller CubeSats because the hardware is compact, power-efficient, and forgiving of pointing error, though the achievable data rate is modest, often in the tens of kilobits per second. S-band", "x2d": -23.63179588317871, "y2d": -16.685331344604492, "x3d": -0.13807788491249084, "y3d": 0.53441321849823, "z3d": -0.20974107086658478}, {"id": "130850be-8cf9-40ab-816e-1fa5bc6070ab", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 9, "text": "## Processing Details\n\nWhen you run the import script, the system will:\n\n1. Parse each markdown file and extract front matter metadata\n2. Split the content into manageable chunks\n3. Generate vector embeddings for each chunk\n4. Store document structure and relationships in Neo4j\n5. Store vector embeddings in Qdrant\n6. Create connections between related documents", "x2d": 4.604567050933838, "y2d": 44.4502067565918, "x3d": 0.655678391456604, "y3d": -0.026470579206943512, "z3d": -0.025687942281365395}, {"id": "141cd45e-abd2-47bc-ab0c-d9659dfcd5a3", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 6, "text": "Terms of Use", "x2d": -14.355414390563965, "y2d": -1.1239629983901978, "x3d": 0.20059028267860413, "y3d": 0.06321383267641068, "z3d": -0.04381374642252922}, {"id": "1723fcd6-2c7f-4be9-9eed-b55fcb88a9fb", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "text", "position": 6, "text": "deeply interdependent: power budget constrains propulsion and payload duty cycles, thermal dissipation from batteries and reaction wheels drives thermal design, and telemetry and anomaly detection tie the whole spacecraft's health picture together. The documents in this set look at each subsystem individually before tying them back together in a mission case study.", "x2d": -1.61525297164917, "y2d": -7.390326499938965, "x3d": -0.16041526198387146, "y3d": -0.10500126332044601, "z3d": 0.35745716094970703}, {"id": "174927c1-dc5f-4017-8e6d-271f1b37eb7e", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 1, "text": "## How to Use This Directory\n\n1. **Add Your Documents**: Place your markdown (`.md`) files in this directory\n2. **Run the Import Script**: Execute `python scripts/import_docs.py --docs-dir your_docs_here/`\n3. **Query Your Content**: Once imported, you can query your content through the GraphRAG system", "x2d": 8.101221084594727, "y2d": 45.345027923583984, "x3d": 0.7568032741546631, "y3d": -0.028227826580405235, "z3d": -0.02569201961159706}, {"id": "1e5d80f2-f4ab-41a2-81e0-db2711346166", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "text", "position": 4, "text": "## **Early Power Profile** \n\nBattery state of charge is the single most closely watched telemetry parameter during the first few orbits, since the spacecraft is not yet in a controlled sun-pointing attitude and panel illumination is still irregular while detumble and ADCS calibration proceed. Each eclipse period draws the battery down; each sunlit arc recovers it. Operators expect a gradual net ri", "x2d": -4.753861904144287, "y2d": -0.0001632306957617402, "x3d": -0.16697727143764496, "y3d": -0.17800788581371307, "z3d": 0.19867095351219177}, {"id": "2832c61e-d715-4e45-ae52-a6efa0b7f290", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "doc_id": "doc_257221d6", "chunk_type": "text", "position": 0, "text": "# ADCS \u2014 Attitude Determination and Control\n\nThe Attitude Determination and Control Subsystem (ADCS) is responsible for knowing which way the spacecraft is pointing and for changing that orientation on command. Attitude control matters for almost every other subsystem: solar panels need to face the sun, antennas need to face the ground station during a pass, and payload sensors need to point at th", "x2d": 20.88363265991211, "y2d": -0.9769212007522583, "x3d": -0.10965722054243088, "y3d": 0.11012202501296997, "z3d": 0.02132420986890793}, {"id": "2995f985-e1f6-4fa7-b3d1-7d9600f03cfb", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "doc_id": "doc_257221d6", "chunk_type": "table", "position": 2, "text": "| Sensor Type | Measurement | Typical Accuracy |\n|---|---|---|\n| Gyroscope | Angular rate | 0.01\u20131 deg/s bias drift |\n| Sun sensor | Sun vector | 0.1\u20131 degree |\n| Magnetometer | Local magnetic field vector | 0.5\u20133 degrees |\n| Star tracker | Absolute attitude quaternion | 0.001\u20130.01 degree |", "x2d": 3.521580219268799, "y2d": 8.615822792053223, "x3d": -0.061599522829055786, "y3d": -0.038637980818748474, "z3d": 0.10633575916290283}, {"id": "2ad3d2d5-aba4-4ace-8c7f-834c6b2f4e0b", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 8, "text": "Contact Us\nDocs build v4.12.0 \u2014 generated automatically. Report issues on the docs repository.", "x2d": 6.971078395843506, "y2d": 35.79328155517578, "x3d": 0.5009313821792603, "y3d": -0.2580576539039612, "z3d": -0.07511961460113525}, {"id": "2cd8d443-4638-4f70-8010-93fe8f2b68e6", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "text", "position": 0, "text": "# **Launch and Deployment Sequence** \n\nThe interval between separation from the launch deployer and the start of routine operations is the highest-risk phase of a CubeSat's life. Every event in this window is scripted in advance, since the spacecraft is tumbling, thermally uncontrolled, and has no ground contact until its antenna deploys and its first beacon is heard. This document lays out a typi", "x2d": -6.758046627044678, "y2d": 10.33878231048584, "x3d": -0.19299152493476868, "y3d": 0.09749731421470642, "z3d": -0.06819134205579758}, {"id": "2d51fd90-2aa1-42bf-b75d-f15eee74f8ad", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 0, "text": "Onboard Computer & Flight Software \u2014 Docs\nHome\nSubsystems\nAPI Reference\nDownloads\nSupport\nSearch documentation...\nOnboard Computer and Flight Software\nThe onboard computer (OBC) is the CubeSat's central processing unit. It runs the flight software that sequences every other subsystem, schedules payload and communications activity, logs telemetry, and executes fault-handling logic when something go", "x2d": -11.669853210449219, "y2d": -23.587093353271484, "x3d": -0.15764641761779785, "y3d": 0.2226657271385193, "z3d": -0.18082259595394135}, {"id": "3314635f-9c05-41ec-a4d2-5ffbebf41f8f", "title": "Thermal Subsystem", "category": "subsystems/thermal", "doc_id": "doc_b934e5f0", "chunk_type": "text", "position": 1, "text": "## Passive vs. Active Thermal Control\n\nPassive control uses material selection, surface coatings, and insulation to shape how heat flows and radiates without consuming power. Active control adds heaters, thermostats, and sometimes louvers or heat pipes to actively move heat where it's needed, at the cost of additional power draw and complexity. Most CubeSats lean heavily on passive design and rese", "x2d": -3.917518138885498, "y2d": -15.515207290649414, "x3d": -0.10030899196863174, "y3d": 0.34993210434913635, "z3d": 0.4148145020008087}, {"id": "359ac368-3f13-4264-b05b-bd79471f54b1", "title": "Power Subsystem", "category": "subsystems/power", "doc_id": "doc_4969e6d2", "chunk_type": "text", "position": 1, "text": "## Solar Panels\n\nBody-mounted solar panels are the simplest option, covering the CubeSat's exterior faces, but deployable panels that unfold after launch can multiply the available collection area several times over. Panel sizing depends on orbit type: a sun-synchronous low Earth orbit gives fairly predictable illumination, while other orbits may include long eclipse periods that the battery has t", "x2d": -10.715516090393066, "y2d": -14.078341484069824, "x3d": 0.02558797225356102, "y3d": 0.5035830140113831, "z3d": 0.23817551136016846}, {"id": "3b0e9635-226c-4242-a671-2e40efd4edf0", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 1, "text": "## **What Telemetry Data Looks Like** \n\nA typical telemetry frame is a timestamped snapshot of dozens to hundreds of parameters, downlinked either continuously during a pass or accumulated onboard and dumped in bulk. Each parameter has an expected nominal range, and most flight software also flags values that cross a hard safety limit in real time, independent of any ground-side analysis.", "x2d": 13.304410934448242, "y2d": -13.106820106506348, "x3d": -0.24880599975585938, "y3d": -0.13538989424705505, "z3d": -0.34615272283554077}, {"id": "3bd0dfb1-1516-4464-8f58-fa70887c8a54", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "table", "position": 3, "text": "|**Telemetry Parameter**|**Subsystem**|**Typical Nominal Range**|\n|---|---|---|\n|Battery voltage|Power|6.4\u20138.4 V (2S Li-ion)|\n|Battery temperature|Power / Thermal|0\u201335 \u00b0C|\n|Reaction wheel speed|ADCS|0\u20136,000 rpm|\n|Reaction wheel temperature|ADCS / Thermal|-10\u201345 \u00b0C|\n|Attitude error|ADCS|< 1 degree (fine-pointing mode)|\n|Downlink signal strength|Communications|Above link margin threshold|", "x2d": 0.847931444644928, "y2d": 9.002996444702148, "x3d": -0.09928525239229202, "y3d": -0.036524295806884766, "z3d": 0.07500000298023224}, {"id": "3e22cd3f-9842-4eb2-a4c6-c13fa851a7c0", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 2, "text": "software on the onboard computer continuously evaluates telemetry against expected nominal ranges. When a parameter drifts or crosses a limit repeatedly, the software escalates through a defined sequence rather than reacting to a single bad sample, which keeps the spacecraft from over-reacting to noise while still catching a genuine fault before it becomes serious. This document walks through that", "x2d": 17.301895141601562, "y2d": -8.578617095947266, "x3d": -0.356691837310791, "y3d": -0.29079195857048035, "z3d": -0.30856379866600037}, {"id": "3fa17ab7-0b76-4a9c-b190-64b45d281df6", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 10, "text": "## Notes\n\n- Place your actual documentation files in this directory\n- Remove the example documents before adding your own content if desired\n- The system works best with well-structured, content-rich markdown files", "x2d": 8.705429077148438, "y2d": 41.05600357055664, "x3d": 0.7685459852218628, "y3d": -0.053511667996644974, "z3d": -0.061190810054540634}, {"id": "4052f875-7126-44af-a2a7-d2b99932685d", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 3, "text": "to the processor that can power-cycle the whole board if the processor itself becomes unresponsive.\nFault Handling and Software Updates\nFlight software fault handling typically works from the same telemetry parameters used for anomaly detection elsewhere on the spacecraft: out-of-range voltages, unexpected temperature trends, or a subsystem that stops responding to commands. When a fault is detect", "x2d": 20.499372482299805, "y2d": -9.20514965057373, "x3d": -0.3765757381916046, "y3d": -0.2094212919473648, "z3d": -0.1396682858467102}, {"id": "44b711d8-eca2-4613-b76b-8381c4480087", "title": "Power Subsystem", "category": "subsystems/power", "doc_id": "doc_4969e6d2", "chunk_type": "text", "position": 4, "text": "## Power Budgeting\n\nA power budget tracks generation against consumption across a full orbit, accounting for eclipse duration, panel pointing, and the duty cycle of every load. Margin is typically held in reserve for degradation over the mission lifetime and for unplanned high-power events like propulsion firings or payload bursts. When the budget is tight, operators reduce duty cycle on non-criti", "x2d": -8.81216049194336, "y2d": -1.7024637460708618, "x3d": 0.02148064225912094, "y3d": 0.08019813150167465, "z3d": 0.32060274481773376}, {"id": "46fb7661-e783-45ba-8ded-8b7813305c57", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 5, "text": "emetry sample\nLog only; no action taken\nLevel 2 \u2014 Warning\nFault counter below safe-mode threshold\nLog and continue monitoring at increased sample rate\nLevel 3 \u2014 Critical\nFault counter reaches threshold (e.g. battery voltage, wheel temperature)\nEnter safe mode; sun-point and shed non-essential loads\nLevel 4 \u2014 Emergency\nHardware watchdog timeout, processor unresponsive\nHardware reset / power-cycle o", "x2d": 21.07749366760254, "y2d": -6.702271938323975, "x3d": -0.2383803278207779, "y3d": -0.3088610768318176, "z3d": 0.025449827313423157}, {"id": "481a2c01-2e08-45ba-a6d1-fd09d82239f1", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "doc_id": "doc_257221d6", "chunk_type": "text", "position": 3, "text": "![Three-axis attitude control diagram showing reaction wheel orientation and body axes for pitch, roll, and yaw](attitude-control-3axis-diagram.png)", "x2d": 7.756136417388916, "y2d": 9.030723571777344, "x3d": 0.19993066787719727, "y3d": -0.08309657871723175, "z3d": 0.07956556230783463}, {"id": "48d78fd8-f046-4ba7-8703-f2eeca3ba34a", "title": "Thermal Subsystem", "category": "subsystems/thermal", "doc_id": "doc_b934e5f0", "chunk_type": "table", "position": 3, "text": "| Material | Thermal Conductivity (W/m\u00b7K) | Typical Use |\n|---|---|---|\n| Aluminum 6061 | ~167 | Structural panels and heat spreaders |\n| MLI blanket (layered) | ~0.0002 effective | External insulation against radiative heat loss/gain |\n| Copper | ~400 | Heat straps and high-conductivity paths to radiators |\n| Titanium | ~22 | Low-conductivity structural isolators and mounts |", "x2d": 0.6543740630149841, "y2d": -18.565908432006836, "x3d": 0.15143582224845886, "y3d": 0.21447564661502838, "z3d": 0.36247357726097107}, {"id": "4a49d55e-bdb1-4000-80e3-173a63a6255c", "title": "Communications Subsystem", "category": "general", "doc_id": "doc_a32152bc", "chunk_type": "text", "position": 2, "text": "pically demands a more directional antenna and tighter pointing control to close the link reliably. Some missions carry both: a low-rate UHF link for housekeeping telemetry and commanding, and a higher-rate S-band link reserved for payload downlink passes.\n\nWhichever band is used, the link has to close according to a link budget, which is simply the accounting of every gain and loss between the tr", "x2d": -26.196460723876953, "y2d": -20.34187126159668, "x3d": -0.10715524852275848, "y3d": 0.3400842845439911, "z3d": -0.27749761939048767}, {"id": "4f44ee05-c5ab-4acf-b36c-6070bac2776a", "title": "Communications Subsystem", "category": "general", "doc_id": "doc_a32152bc", "chunk_type": "text", "position": 3, "text": "oss over the slant range to the ground station, atmospheric losses, and the receiver's noise floor. If the link budget doesn't leave enough margin, packets get dropped or the receiver can't lock onto the signal at all, so link budget is usually one of the first calculations done during mission design and one of the first things re-checked whenever antenna hardware or ground station equipment chang", "x2d": -24.465496063232422, "y2d": -19.877552032470703, "x3d": -0.07154100388288498, "y3d": 0.4128478169441223, "z3d": -0.29715684056282043}, {"id": "52e04d77-bf6d-47e4-8105-64dcdf545e81", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 7, "text": "me escalation pattern, driven by telemetry and fault counters rather than single-sample triggers, is what allowed operators to catch and manage the reaction wheel degradation described in the mission case study well before it became a more serious failure.\nDocs build v4.12.0 \u2014 generated automatically. Report issues on the docs repository.", "x2d": 13.03730583190918, "y2d": -1.2442209720611572, "x3d": -0.052788786590099335, "y3d": -0.423687607049942, "z3d": -0.022465918213129044}, {"id": "5585189c-1092-4389-ad5b-6a491653e7d6", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "text", "position": 5, "text": "ry other subsystem, handles fault detection and watchdog resets, and manages onboard data storage.\n\n**Propulsion**, when present, provides delta-v for orbit maintenance, collision avoidance, or deorbit; many CubeSats fly without propulsion and rely on atmospheric drag instead.\n\n**Telemetry** is the continuous stream of housekeeping data \u2014 voltages, temperatures, wheel speeds, and more \u2014 that every", "x2d": -3.6691360473632812, "y2d": -8.114313125610352, "x3d": -0.28622519969940186, "y3d": 0.09771554917097092, "z3d": 0.10060961544513702}, {"id": "5ab22a08-0422-42cc-b6de-87f7247b6c2e", "title": "Power Subsystem", "category": "subsystems/power", "doc_id": "doc_4969e6d2", "chunk_type": "text", "position": 5, "text": "## Interaction with Thermal Dissipation\n\nBatteries are not perfectly efficient: charging and discharging both generate waste heat, and this thermal dissipation has to be managed by the thermal subsystem, particularly during high-current events like eclipse recovery charging. Battery performance is itself temperature-dependent \u2014 capacity fades at low temperatures and cycle life degrades at high one", "x2d": -0.5947399139404297, "y2d": -3.507769823074341, "x3d": -0.2675304412841797, "y3d": -0.2784084975719452, "z3d": 0.37233591079711914}, {"id": "5c3cb95c-b8a2-4bb0-a112-8b0144823674", "title": "Thermal Subsystem", "category": "subsystems/thermal", "doc_id": "doc_b934e5f0", "chunk_type": "text", "position": 5, "text": "## Internal Heat Sources\n\nTwo of the largest internal heat sources on a typical CubeSat are the battery and the reaction wheels. Battery charge and discharge cycles dissipate heat proportional to current squared, and this load spikes during eclipse-recovery charging or high-power payload operations. Reaction wheels generate friction heat continuously while spinning, and that heat output rises furt", "x2d": 1.0175831317901611, "y2d": -7.985219478607178, "x3d": -0.31858840584754944, "y3d": -0.026082511991262436, "z3d": 0.38382425904273987}, {"id": "5f827d0b-1e22-4cb0-acbb-8cd795da6613", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 1, "text": "function, the OBC is typically the most heavily tested piece of hardware on the bus before launch.\nProcessor Selection\nOBC processor choice trades performance against power draw and radiation tolerance. Many CubeSat missions use commercial microcontrollers with software-level fault mitigation rather than expensive radiation-hardened parts, accepting a higher single-event-upset rate in exchange for", "x2d": -10.354574203491211, "y2d": -25.239336013793945, "x3d": -0.19111013412475586, "y3d": 0.28213170170783997, "z3d": 0.04543724283576012}, {"id": "6231a96b-41a9-4e6d-ab98-7ab74469170d", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 2, "text": "## Nominal Operations\n\nFor the first year of operations, EX-1 ran a routine cycle: fine-pointing at its payload targets during data-collection windows, returning to a sun-pointing mode between them to maximize power generation, and downlinking accumulated telemetry and payload data during ground station passes. The power budget held comfortably through this period, with battery state of charge rec", "x2d": -8.852625846862793, "y2d": 1.38252592086792, "x3d": -0.1622714102268219, "y3d": -0.060838960111141205, "z3d": 0.1782304346561432}, {"id": "6403a527-24b6-4f98-b375-0197e2ea76af", "title": "Power Subsystem", "category": "subsystems/power", "doc_id": "doc_4969e6d2", "chunk_type": "table", "position": 3, "text": "| Chemistry | Energy Density (Wh/kg) | Cycle Life | Typical Use |\n|---|---|---|---|\n| Li-ion | 150\u2013250 | 500\u20131,000 cycles | Most common choice; high energy density for mass-constrained buses |\n| LiFePO4 | 90\u2013160 | 2,000\u20133,000+ cycles | Longer-duration missions where cycle life matters more than mass |\n| NiMH | 60\u2013120 | 500\u20131,000 cycles | Legacy or low-cost designs; more tolerant of overcharge |", "x2d": -9.636775016784668, "y2d": -3.850735664367676, "x3d": 0.13303767144680023, "y3d": 0.15012982487678528, "z3d": 0.3694411814212799}, {"id": "65f7dcb6-dc3d-49f4-bd52-ab8bf1005152", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 0, "text": "Fault Handling and Safe Mode \u2014 Docs\nbody { font-family: Helvetica, Arial, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; color: #222; line-height: 1.55; }\nh1 { border-bottom: 2px solid #2C5F8A; padding-bottom: 8px; }\nh2 { color: #2C5F8A; margin-top: 34px; }\ntable { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }\nth, td { border: 1px solid #999; padding", "x2d": 1.70436429977417, "y2d": 22.031496047973633, "x3d": 0.31338074803352356, "y3d": -0.060478419065475464, "z3d": -0.08474940806627274}, {"id": "686c7e64-0662-4f97-acf3-c0c7b39ccc77", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 2, "text": "## Document Format Requirements\n\nFor optimal results, your documents should follow this structure:", "x2d": 7.561581611633301, "y2d": 38.25654983520508, "x3d": 0.7113246321678162, "y3d": -0.05653591454029083, "z3d": -0.02870529145002365}, {"id": "697641e9-045d-4848-88dd-97294b0cdb4c", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "text", "position": 5, "text": "panel pointing becomes more consistent \u2014 a battery that fails to recover between eclipses during this window is treated as an early commissioning anomaly and investigated immediately rather than waiting for the standard fault-counter threshold to trip. \n\n\n\n_Figure 2. Battery state of charge across the first commissioning orbits, with eclipse periods shaded._ \n\nThis early power telemetry, together ", "x2d": -3.372983932495117, "y2d": 0.059372272342443466, "x3d": -0.18595504760742188, "y3d": -0.3543996214866638, "z3d": 0.10483437776565552}, {"id": "6d5c13fb-c078-46f6-a031-213edca499cc", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "code", "position": 4, "text": "```yaml\n---\ntitle: \"Document Title\"          # The title of your document (required)\ncategory: \"path/to/category\"     # Category path for organization (required)\nupdated: \"YYYY-MM-DD\"            # Last updated date (optional)\nrelated:                         # Related documents (optional)\n  - path/to/related1.md\n  - path/to/related2.md\nkey_concepts:                    # Key concepts for indexing (", "x2d": 11.491523742675781, "y2d": 37.55463790893555, "x3d": 0.6572186946868896, "y3d": -0.045059386640787125, "z3d": -0.08133884519338608}, {"id": "6e29bf97-ce2f-4bf6-9e53-2be1fd87eb2a", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 2, "text": "## **Telemetry Parameters by Subsystem**", "x2d": 14.435772895812988, "y2d": -15.610692024230957, "x3d": 0.05508609116077423, "y3d": -0.06218899413943291, "z3d": -0.25208619236946106}, {"id": "6e906ab7-7046-4940-9698-d0f40553cd2e", "title": "Ground Station Operations", "category": "ops/ground-station", "doc_id": "doc_e4938355", "chunk_type": "text", "position": 4, "text": "## Telemetry Downlink\n\nThe telemetry downlinked during each pass is the primary source of spacecraft health data for the operations team: bus voltages, temperatures, attitude and wheel speed data, and any onboard fault logs accumulated since the last contact. Operators typically review this telemetry against expected nominal ranges immediately after each pass, since a trend that starts drifting be", "x2d": 11.729345321655273, "y2d": -11.66092300415039, "x3d": -0.30019089579582214, "y3d": -0.19814136624336243, "z3d": -0.2632681727409363}, {"id": "6e99ad58-57e6-45c6-aa78-1d7dca17f429", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 3, "text": "ault Detection Logic\nEach telemetry parameter is checked on every sample against its nominal range. A single out-of-range sample increments a per-parameter fault counter rather than triggering an immediate response; only once that counter reaches a configured threshold does the flight software treat the condition as persistent rather than transient noise. Persistent faults trigger safe mode, which", "x2d": 18.380184173583984, "y2d": -6.984227657318115, "x3d": -0.35541006922721863, "y3d": -0.22082670032978058, "z3d": -0.14705568552017212}, {"id": "750bdb0f-30dc-4c2f-a862-eee5888729b8", "title": "Communications Subsystem", "category": "general", "doc_id": "doc_a32152bc", "chunk_type": "text", "position": 0, "text": "A CubeSat's communications subsystem is what turns an orbiting piece of hardware into something operators can actually talk to. It handles two directions of traffic: the uplink, which carries commands and software from a ground station up to the spacecraft, and the downlink, which carries telemetry and payload data back down. Both links share the same basic physics, but they're usually engineered ", "x2d": -16.42346954345703, "y2d": -16.501277923583984, "x3d": -0.21204233169555664, "y3d": 0.556522786617279, "z3d": -0.2370224893093109}, {"id": "79cb9be7-4df8-4cc7-88f7-2947235e15b2", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "text", "position": 0, "text": "# CubeSat Mission Overview\n\nA CubeSat is a small satellite built from standardized cubic units, typically 10 cm on a side (1U), and launched in multiples of that unit (3U, 6U, 12U). The standard was originally developed to give university teams a low-cost, repeatable path to orbit, and it has since become common for commercial constellations, technology demonstrations, and government research payl", "x2d": -15.042098999023438, "y2d": -13.796201705932617, "x3d": -0.0074272300116717815, "y3d": 0.5949897766113281, "z3d": 0.0007247809553518891}, {"id": "7a8a3c14-e5e6-4eab-9502-7326381a95b0", "title": "Thermal Subsystem", "category": "subsystems/thermal", "doc_id": "doc_b934e5f0", "chunk_type": "text", "position": 4, "text": "![Thermal gradient diagram showing temperature distribution across the spacecraft body from sun-facing to shadow-facing sides](thermal-gradient-diagram.png)", "x2d": -0.926231324672699, "y2d": -12.512104034423828, "x3d": 0.06322529166936874, "y3d": -0.01831802912056446, "z3d": 0.33135873079299927}, {"id": "7b20a539-88f2-44aa-89be-e8f899a0e307", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 2, "text": "80\u2013180 MHz\n0.1\u20130.3 W\nARM Cortex-A (SoC class)\n800 MHz\u20131.5 GHz\n1\u20133 W\nRadiation-hardened SPARC (e.g. LEON class)\n50\u2013100 MHz\n0.5\u20131.5 W\nFPGA-based (soft-core processor)\n50\u2013200 MHz\n0.3\u20132 W\nWatchdog Timers\nA watchdog timer is a hardware or software counter that must be periodically reset by the flight software; if it isn't reset in time, the watchdog assumes the software has hung and forces a reset. Mos", "x2d": -9.169988632202148, "y2d": -26.626399993896484, "x3d": -0.22549404203891754, "y3d": 0.03513096645474434, "z3d": -0.17122690379619598}, {"id": "7d5f6d3d-9008-4ca8-b5fe-9e9102df5754", "title": "Ground Station Operations", "category": "ops/ground-station", "doc_id": "doc_e4938355", "chunk_type": "text", "position": 3, "text": "## Link Budget in Practice\n\nEvery pass is ultimately governed by the same link budget introduced in the communications subsystem: transmit power, antenna gains, path loss over the slant range, and receiver sensitivity all have to sum to enough margin to close the link reliably, and that margin is thinnest at low elevation angles where the slant range is longest and atmospheric loss is highest. Gro", "x2d": -23.999099731445312, "y2d": -21.951509475708008, "x3d": -0.08703139424324036, "y3d": 0.2940542995929718, "z3d": -0.2818627953529358}, {"id": "82fff203-aa6a-43a9-a432-67fac918fbd5", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 6, "text": "## Example Document\n\nSee the included `analytics_example.md` file for a comprehensive example of the recommended document format.", "x2d": 5.406656742095947, "y2d": 39.77781295776367, "x3d": 0.5232396125793457, "y3d": -0.1030443087220192, "z3d": 0.04104284569621086}, {"id": "84c81fb9-0cdf-4fc3-af1b-b7b325b2e4eb", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 4, "text": "ssive passes showed a clear, steady climb that stood out against the wheel's established baseline.\n\nOperators cross-checked the affected wheel's telemetry against the spacecraft's overall thermal trend and confirmed that the extra heat was localized to that one wheel rather than a broader thermal issue, which pointed toward a mechanical rather than an environmental cause. As a precaution, the flig", "x2d": 8.556784629821777, "y2d": 1.3364049196243286, "x3d": -0.12875065207481384, "y3d": -0.2674238085746765, "z3d": 0.2455671727657318}, {"id": "890f6e3d-98c8-457f-8e51-05dd55fc6ad7", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 6, "text": "itude and waits for ground contact rather than attempting to self-diagnose further, since diagnosis usually benefits from a human reviewing the accumulated fault log alongside broader telemetry trends. During the next pass, operators review what tripped the fault counter, decide on a corrective action \u2014 anything from adjusting a threshold that was set too tight to commanding a specific subsystem w", "x2d": 17.81450653076172, "y2d": -10.282869338989258, "x3d": -0.2867163419723511, "y3d": -0.3479710519313812, "z3d": -0.3150433599948883}, {"id": "89ee503e-8c32-4bc4-a61d-2a7a63442868", "title": "Power Subsystem", "category": "subsystems/power", "doc_id": "doc_4969e6d2", "chunk_type": "text", "position": 2, "text": "## Battery Chemistry\n\nThe battery stores energy generated during sunlit periods for use during eclipse and peak-load events. Chemistry choice trades energy density, cycle life, and tolerance to the CubeSat's operating temperature range.", "x2d": -7.838771343231201, "y2d": -14.846030235290527, "x3d": -0.10846760869026184, "y3d": 0.25505924224853516, "z3d": 0.43159371614456177}, {"id": "8d8f2c68-3468-4285-8baa-464635ab463b", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "doc_id": "doc_257221d6", "chunk_type": "text", "position": 5, "text": "## Attitude Control Modes\n\nMost missions define a small set of attitude control modes: a detumble mode right after deployment, a sun-pointing safe mode that maximizes power generation, and a fine-pointing operational mode for payload or communications tasks. Transitions between modes are usually automatic, triggered by onboard fault detection logic, so that the spacecraft can protect itself even d", "x2d": 20.640254974365234, "y2d": -3.8184375762939453, "x3d": -0.2127629965543747, "y3d": -0.10305364429950714, "z3d": -0.05845964699983597}, {"id": "8db66f9b-8af2-4855-9113-153ca53e7fe1", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "doc_id": "doc_257221d6", "chunk_type": "text", "position": 4, "text": "## Reaction Wheel Heat and Degradation\n\nReaction wheels are also one of the subsystem's closest links to the thermal subsystem: bearing friction generates continuous heat that rises as the wheel spins, and that heat output tends to climb further as bearing lubrication degrades over the mission lifetime. This makes wheel temperature and wheel speed two of the most useful telemetry parameters for an", "x2d": 7.285068988800049, "y2d": -1.8177741765975952, "x3d": -0.20723497867584229, "y3d": -0.3630355894565582, "z3d": 0.322717547416687}, {"id": "9147309e-8ab8-4712-97bc-701af5477f02", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 5, "text": "## **Why It Matters Across Subsystems** \n\nAnomaly detection only works well when it looks across subsystems rather than at one parameter in isolation. A battery that runs warmer than its baseline might indicate a charging problem in the power subsystem, or it might simply reflect elevated thermal dissipation from a nearby reaction wheel running hot \n\ndue to bearing wear \u2014 the two look similar in i", "x2d": 0.7547400593757629, "y2d": -4.024331092834473, "x3d": -0.2580440640449524, "y3d": -0.290592223405838, "z3d": 0.35693398118019104}, {"id": "938f98ac-9cab-48f1-9a7b-11e19b534235", "title": "Communications Subsystem", "category": "general", "doc_id": "doc_a32152bc", "chunk_type": "text", "position": 4, "text": "antennas are common for UHF and VHF, since they're simple, lightweight, and reasonably omnidirectional, which helps when the spacecraft's attitude isn't tightly controlled. Patch antennas are more common at S-band, offering higher gain in a compact, body-mounted form factor, though usually with a narrower beamwidth that benefits from good attitude knowledge during a pass.\n\nDuring every ground cont", "x2d": -25.76793670654297, "y2d": -18.13222312927246, "x3d": -0.17400120198726654, "y3d": 0.3157758414745331, "z3d": -0.33236297965049744}, {"id": "99151ab0-26fc-4759-bd16-a7e69d9ce4fa", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 1, "text": "ter; }\nfigure img { max-width: 100%; border: 1px solid #ccc; }\nfigcaption { font-size: 13px; color: #555; margin-top: 8px; font-style: italic; }\nnav { background: #f0f0f0; padding: 10px 16px; margin-bottom: 30px; font-size: 13px; }\nnav a { margin-right: 14px; color: #2C5F8A; text-decoration: none; }\nfooter { margin-top: 50px; border-top: 1px solid #ccc; padding-top: 12px; font-size: 12px; color: #", "x2d": 2.78436279296875, "y2d": 21.378604888916016, "x3d": 0.28869593143463135, "y3d": -0.07954951375722885, "z3d": -0.0931161493062973}, {"id": "9a6651f0-42cf-4b8d-a582-b7cfe0abad46", "title": "Ground Station Operations", "category": "ops/ground-station", "doc_id": "doc_e4938355", "chunk_type": "text", "position": 1, "text": "## Pass Planning and Scheduling\n\nBecause a CubeSat in low Earth orbit is only visible from a given ground station for a handful of minutes several times a day, operators generate a pass schedule from orbital predictions, ranking each pass by maximum elevation angle \u2014 higher passes generally offer a stronger, more stable link and more contact time above the local horizon mask. Missions with a netwo", "x2d": -19.123432159423828, "y2d": -16.84255599975586, "x3d": -0.1734132617712021, "y3d": 0.4520629942417145, "z3d": -0.1570957452058792}, {"id": "9a77aed3-747a-4a52-a5c3-f77f37aa6d75", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "text", "position": 2, "text": "## **Deployment Milestone Table**", "x2d": -4.196382522583008, "y2d": 13.184385299682617, "x3d": 0.27217552065849304, "y3d": -0.10259874910116196, "z3d": -0.11071614921092987}, {"id": "9b03289a-f945-4c61-9c99-f9c375b19a8d", "title": "Thermal Subsystem", "category": "subsystems/thermal", "doc_id": "doc_b934e5f0", "chunk_type": "text", "position": 2, "text": "## Insulation and Radiators\n\nMulti-layer insulation (MLI) blankets \u2014 alternating layers of reflective film and low-conductivity spacer material \u2014 are the standard passive tool for isolating sensitive components from external temperature swings. Radiators, typically a dedicated external panel with a high-emissivity coating, are used to reject excess heat to space, often from the side of the spacecr", "x2d": -0.055247362703084946, "y2d": -19.552776336669922, "x3d": 0.01865973137319088, "y3d": 0.1310139149427414, "z3d": 0.25964346528053284}, {"id": "9f1bf5e6-3db6-4b9c-ad78-1223262cfe0c", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 7, "text": "lly means comparing several passes' worth of link telemetry rather than judging a single contact. \n\nBecause battery behavior, reaction wheel health, thermal dissipation, and link budget performance all surface first as telemetry trends, this parameter set is what ties the power, thermal, ADCS, and communications subsystems together operationally \u2014 anomaly detection across that combined telemetry p", "x2d": 8.97662353515625, "y2d": -12.5313720703125, "x3d": -0.22512726485729218, "y3d": -0.2057003676891327, "z3d": -0.07900259643793106}, {"id": "a5c58bf5-92fa-442a-aada-848220ca2e9b", "title": "Communications Subsystem", "category": "general", "doc_id": "doc_a32152bc", "chunk_type": "text", "position": 5, "text": "longside whatever payload data has queued up since the last pass, and the uplink is used to send any new commands or software updates the mission needs to execute before the next contact window.", "x2d": -14.049422264099121, "y2d": 9.160984992980957, "x3d": -0.11795194447040558, "y3d": -0.007434418890625238, "z3d": -0.3467506170272827}, {"id": "a76254ea-3caf-469c-b18b-05e62f3796fb", "title": "Thermal Subsystem", "category": "subsystems/thermal", "doc_id": "doc_b934e5f0", "chunk_type": "text", "position": 0, "text": "# Thermal Subsystem\n\nIn orbit, a CubeSat has no air around it to carry heat away by convection, so every watt of dissipated power has to leave the spacecraft by conduction to a radiating surface or by direct radiation to space. The thermal subsystem's job is to keep every component within its survival and operating limits despite that constraint, across both hot sunlit periods and cold eclipse per", "x2d": -4.313384056091309, "y2d": -12.900677680969238, "x3d": -0.1377502828836441, "y3d": 0.41817596554756165, "z3d": 0.4257131516933441}, {"id": "aa0f862b-a9a9-4eb8-a6ef-d075caaef79b", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "table", "position": 2, "text": "| Mission Phase | Typical Duration | Key Subsystem Activity |\n|---|---|---|\n| Integration & Test | 2\u20136 months | Power, OBC, and comms bring-up; environmental testing |\n| Launch & Early Orbit | Hours to 1 week | Deployment, solar panel and antenna release, first telemetry contact |\n| Commissioning | 2\u20136 weeks | ADCS detumble and calibration, subsystem checkout |\n| Nominal Operations | 6 months \u2013 5+", "x2d": -1.9183024168014526, "y2d": 9.497047424316406, "x3d": -0.13632886111736298, "y3d": -0.017782866954803467, "z3d": -0.07498679310083389}, {"id": "aa56e0b5-bf1f-48b0-8f0a-b06febde8496", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "text", "position": 4, "text": "east severe end up to forcing the spacecraft into a safe, sun-pointing mode at the most severe end. Software updates are uploaded via the uplink in stages, verified against a checksum before being written to non-volatile memory, and applied behind a rollback mechanism so a bad update can't permanently strand the spacecraft.\n&copy; 2026 Example Aerospace Documentation Project. All rights reserved.\n", "x2d": 23.486940383911133, "y2d": -9.662266731262207, "x3d": -0.12408509105443954, "y3d": -0.15164490044116974, "z3d": -0.19697563350200653}, {"id": "aab60e71-6148-4bf0-9671-7509d4e6502b", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "table", "position": 3, "text": "|**Event**|**Time Post-Separation**|**Primary Subsystem**|\n|---|---|---|\n|Separation from deployer|T+0|Structure|\n|Detumble begins|T+2 min|ADCS|\n|Solar panel deploy|T+5 min|Power|\n|Antenna deploy|T+10 min|Communications|\n|First beacon transmitted|T+15 min|Communications / OBC|\n|First ground acquisition|T+90 min|Communications / Ground Segment|\n|ADCS calibration complete|T+1 day|ADCS|\n|Subsystem ch", "x2d": -3.0993568897247314, "y2d": 10.213415145874023, "x3d": -0.016365891322493553, "y3d": -0.008986157365143299, "z3d": -0.13774554431438446}, {"id": "ae16a191-482a-40ff-8f26-93f6334db91f", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 6, "text": "d the reaction wheels feeds into the same spacecraft thermal environment, correlating power, thermal, and ADCS telemetry together is often the only way to tell which subsystem is actually the source of a drift. \n\nCommunications telemetry plays a similar cross-checking role: a downlink whose signal strength is weaker than the link budget predicts for a given pass geometry can point to an antenna de", "x2d": 7.372885227203369, "y2d": -9.917302131652832, "x3d": -0.335470587015152, "y3d": -0.12595796585083008, "z3d": 0.016155345365405083}, {"id": "b11d0388-df46-43f2-90ad-5fed01e0fa8f", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 0, "text": "# **Telemetry and Anomaly Detection** \n\nTelemetry is the continuous stream of housekeeping data a CubeSat produces about its own health: voltages, currents, temperatures, wheel speeds, attitude error, and more. Every subsystem contributes parameters to this stream, which makes telemetry the single most useful signal operators have for understanding what is actually happening on orbit, and anomaly ", "x2d": 11.181278228759766, "y2d": -7.7821784019470215, "x3d": -0.3481345772743225, "y3d": 0.009397481568157673, "z3d": -0.17906799912452698}, {"id": "b1752c3a-a636-4f48-868a-c8eb8a7ca972", "title": "Ground Station Operations", "category": "ops/ground-station", "doc_id": "doc_e4938355", "chunk_type": "text", "position": 2, "text": "## Antenna Pointing and Doppler Correction\n\nGround antennas track the spacecraft's predicted path across the sky in azimuth and elevation, and because the satellite is moving at several kilometers per second relative to the ground, the received signal is subject to significant Doppler shift over the course of a pass \u2014 the frequency is compressed as the spacecraft approaches and stretched as it rec", "x2d": -21.25688934326172, "y2d": -22.229679107666016, "x3d": -0.12152045220136642, "y3d": 0.10911009460687637, "z3d": -0.40728408098220825}, {"id": "b5adbcfe-9eb8-4dfa-b8b8-1e9b49dabfbf", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 7, "text": "## Importing Documents\n\nTo import your documents into the GraphRAG system:", "x2d": 7.1910786628723145, "y2d": 46.96742630004883, "x3d": 0.5887804627418518, "y3d": -0.08777275681495667, "z3d": -0.05748603120446205}, {"id": "c0a1f202-bc67-4377-89f1-6ffc5cd71d9e", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "doc_id": "doc_5105ead2", "chunk_type": "text", "position": 4, "text": "## **Statistical Anomaly Detection Basics** \n\nThe simplest anomaly detection technique is thresholding: flagging any parameter that falls outside a predefined nominal range. Thresholding catches gross faults quickly but misses slower problems, since a value can drift steadily and still stay inside its safety limits for a long time. A moving average smooths out pass-to-pass noise and reveals that k", "x2d": 9.868552207946777, "y2d": -5.393786430358887, "x3d": -0.3011675775051117, "y3d": -0.3903800845146179, "z3d": -0.04974288120865822}, {"id": "c7d37f7c-afb4-43e0-8e84-8743adbfa390", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "text", "position": 6, "text": "t: once the spacecraft settles into nominal operations, any parameter drifting away from the pattern established here is what flags a developing issue, as described in the telemetry and anomaly detection and mission case study documents.", "x2d": 14.81365966796875, "y2d": -8.332983016967773, "x3d": -0.22365128993988037, "y3d": -0.34019118547439575, "z3d": -0.25941672921180725}, {"id": "c86d39f8-789b-4237-ba6d-6824acd2127a", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "code", "position": 8, "text": "```bash\n# Import all documents from this directory\npython scripts/import_docs.py --docs-dir your_docs_here/\n\n# Or import specific documents\npython scripts/import_docs.py --files your_docs_here/file1.md your_docs_here/file2.md\n\n# To reimport (clear and rebuild)\npython scripts/import_docs.py --docs-dir your_docs_here/ --clear\n```", "x2d": 10.533475875854492, "y2d": 45.6563835144043, "x3d": 0.5910525918006897, "y3d": -0.09248127788305283, "z3d": -0.05711057037115097}, {"id": "c9016f3f-ab0e-4366-9f1c-22e4104e50c5", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 3, "text": "## The Anomaly\n\nAbout fourteen months into the mission, ground operators reviewing downlinked telemetry noticed a small but persistent upward drift in one reaction wheel's operating temperature and current draw for a given commanded speed \u2014 a signature consistent with early bearing wear. This is exactly the kind of trend that anomaly detection is designed to catch: no single telemetry point looked", "x2d": 8.781063079833984, "y2d": -3.570589303970337, "x3d": -0.27689027786254883, "y3d": -0.4875664710998535, "z3d": 0.02996942028403282}, {"id": "cd0fda85-9590-4ee8-ae71-11170c8d05c5", "title": "Launch and Deployment Sequence", "category": "operations/launch", "doc_id": "doc_fbc6a4b6", "chunk_type": "text", "position": 1, "text": "## **Deployment Event Sequence** \n\nImmediately after separation, a preprogrammed inhibit delay holds off any deployments or radio transmissions for a short period, giving the spacecraft time to clear the deployer before anything extends. From there, the sequence below runs autonomously; no ground command is required until after first ground acquisition. \n\n\n\n_Figure 1. Deployment event timeline fro", "x2d": -7.609699726104736, "y2d": 8.79675006866455, "x3d": -0.04443149268627167, "y3d": -0.10914620757102966, "z3d": -0.29062485694885254}, {"id": "d05423d9-490a-4dfc-bd31-ad2905190b4c", "title": "Ground Station Operations", "category": "ops/ground-station", "doc_id": "doc_e4938355", "chunk_type": "text", "position": 0, "text": "# Ground Station Operations\n\nOperating a CubeSat is as much about the ground segment as it is about the spacecraft itself. A ground station tracks the satellite as it passes overhead, closes an RF link for a few minutes at a time, and uses that window to pull down telemetry and payload data while pushing up any waiting commands.", "x2d": -16.99640655517578, "y2d": -17.7409725189209, "x3d": -0.17684321105480194, "y3d": 0.49578502774238586, "z3d": -0.2939634323120117}, {"id": "d215cfbd-a08a-4968-a5b6-39c5ff0c1302", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 3, "text": "### Front Matter Format (Required)\n\nInclude YAML front matter at the beginning of your documents with these fields:", "x2d": 9.1132230758667, "y2d": 37.653358459472656, "x3d": 0.6918917894363403, "y3d": -0.10917413234710693, "z3d": -0.02052341215312481}, {"id": "d622bf31-63b1-4796-9ca1-708e11dd30ef", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 5, "text": "onto the two healthier wheels and the magnetorquers, trading a small amount of pointing precision for a meaningful reduction in the degrading wheel's heat output and mechanical stress.", "x2d": 7.698427200317383, "y2d": 3.3916873931884766, "x3d": 0.09802302718162537, "y3d": -0.17422321438789368, "z3d": 0.35153043270111084}, {"id": "d7a051ee-9819-4e89-bd8e-206c6fcafcd2", "title": "Fault Handling And Safe Mode", "category": "general", "doc_id": "doc_9deb230a", "chunk_type": "text", "position": 4, "text": "bles non-essential loads until an operator can review the situation during the next ground contact.\nFigure 1. Onboard fault detection and safe mode transition logic.\nFault Severity Levels\nNot every anomaly warrants the same response. Flight software classifies faults into severity levels so that a minor, self-recoverable issue doesn't trigger the same drastic response as a subsystem-threatening on", "x2d": 20.314132690429688, "y2d": -11.836795806884766, "x3d": -0.2172112762928009, "y3d": -0.2592296004295349, "z3d": -0.24696610867977142}, {"id": "e15aeb6c-d92e-4990-996c-c5b59d7baea2", "title": "Onboard Computer", "category": "subsystems/obc", "doc_id": "doc_287310b7", "chunk_type": "table", "position": 7, "text": "|", "x2d": 9.556148529052734, "y2d": 23.44853973388672, "x3d": 0.3717350363731384, "y3d": -0.10140655189752579, "z3d": -0.06731325387954712}, {"id": "e1f36e5b-2e63-4701-993d-5eb264131f0a", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "text", "position": 1, "text": "## Mission Phases\n\nEvery CubeSat mission moves through a similar sequence of phases from integration through disposal. The table below summarizes the major phases, their typical duration, and the subsystem activity that dominates each one.", "x2d": -13.94845962524414, "y2d": -10.373835563659668, "x3d": 0.003368775360286236, "y3d": 0.35761967301368713, "z3d": 0.008035006932914257}, {"id": "e3b01d79-aee3-402f-a174-6a05ddc8fc74", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 7, "text": "## End of Mission\n\nEX-1 continued science operations for the remainder of its planned lifetime under the adjusted wheel configuration. At end of life, the spacecraft was passivated \u2014 batteries discharged to a safe state and propulsion systems (where present) safed \u2014 and left to decay from orbit via atmospheric drag, consistent with standard end-of-life disposal practice for missions in its orbit r", "x2d": -10.645182609558105, "y2d": 3.6540563106536865, "x3d": -0.04122471064329147, "y3d": -0.2723759710788727, "z3d": 0.1505061537027359}, {"id": "e4d5512f-66dd-4342-88e9-ec5e4c98dc53", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 6, "text": "## Workaround and Recovery\n\nThe reduced-speed workaround stabilized the wheel's temperature trend within a few weeks, and the power budget absorbed the change easily since magnetorquer operation draws relatively little power compared to a reaction wheel running at full authority. Thermal margins across the spacecraft remained healthy throughout, since the affected wheel's heat output, while elevat", "x2d": 9.069826126098633, "y2d": -0.8262148499488831, "x3d": -0.21706517040729523, "y3d": -0.4529796242713928, "z3d": 0.2768743932247162}, {"id": "eab11bfd-8b45-4b0b-833e-a93784a3eff8", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 1, "text": "## Launch and Commissioning\n\nEX-1 launched as a rideshare payload and was deployed into a sun-synchronous low Earth orbit. Within the first orbit, its deployable solar panels released and its UHF antenna deployed, giving ground operators their first telemetry contact a few hours after separation. Commissioning followed the standard sequence: an ADCS detumble to bring the tumbling spacecraft under ", "x2d": -8.552313804626465, "y2d": 3.387208938598633, "x3d": -0.08421666920185089, "y3d": -0.1060933768749237, "z3d": -0.03181004524230957}, {"id": "eb96fe9c-e356-41ed-a78a-5f85e7883f2d", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "doc_id": "doc_41b9d1bb", "chunk_type": "text", "position": 0, "text": "# Mission Case Study: Example CubeSat\n\nThis case study follows a fictional 3U CubeSat, referred to here as EX-1, through its mission life to illustrate how the subsystems described elsewhere in this set actually interact in practice.", "x2d": -16.496206283569336, "y2d": -11.402568817138672, "x3d": 0.06609296053647995, "y3d": 0.1860656887292862, "z3d": -0.020850542932748795}, {"id": "f12dfcab-5be0-4140-b944-0a6b636b3ecf", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "doc_id": "doc_8226f870", "chunk_type": "text", "position": 3, "text": "## Subsystem Summaries\n\n**Power** generates, stores, and distributes electrical energy using solar panels and onboard batteries, and it has to balance generation against every other subsystem's draw across each orbit.\n\n**Thermal** keeps every component within its survival and operating temperature limits using a mix of passive insulation and active heaters or radiators, since a CubeSat has almost ", "x2d": -5.634202003479004, "y2d": -12.433553695678711, "x3d": -0.17556311190128326, "y3d": 0.38419049978256226, "z3d": 0.42084643244743347}, {"id": "f244f9bb-8b20-4daf-873d-0f0908de04ed", "title": "Your Documentation Directory", "category": "your_docs_here", "doc_id": "doc_d376663e", "chunk_type": "text", "position": 0, "text": "# Your Documentation Directory\n\nThis directory is where you add your markdown documents to be processed and imported into the GraphRAG hybrid retrieval system. Any `.md` files placed here will be processed, embedded, and stored in both Neo4j and Qdrant databases.", "x2d": 6.388188362121582, "y2d": 44.38648223876953, "x3d": 0.6762184500694275, "y3d": -0.055247705429792404, "z3d": -0.034754298627376556}, {"id": "f24ba0fa-e320-4efb-8603-91b4910384b9", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "doc_id": "doc_257221d6", "chunk_type": "text", "position": 1, "text": "## Actuators and Sensors\n\nReaction wheels are the primary fine-pointing actuator on most three-axis-stabilized CubeSats: spinning a small flywheel faster or slower exchanges angular momentum with the spacecraft body to rotate it. Magnetorquers generate a magnetic dipole that reacts against Earth's magnetic field, useful for coarse control and for \"desaturating\" reaction wheels that have spun up to", "x2d": 6.138519287109375, "y2d": 7.9530863761901855, "x3d": -0.0493774451315403, "y3d": 0.11282370984554291, "z3d": 0.16887922585010529}], "graph_nodes": [{"id": "doc_431", "label": "ADCS \u2014 Attitude Determination and Control", "group": "Document", "doc_id": "doc_257221d6", "title": "ADCS \u2014 Attitude Determination and Control", "category": "subsystems/adcs", "size": 28}, {"id": "doc_432", "label": "Communications Subsystem", "group": "Document", "doc_id": "doc_a32152bc", "title": "Communications Subsystem", "category": "general", "size": 28}, {"id": "doc_433", "label": "Fault Handling And Safe Mode", "group": "Document", "doc_id": "doc_9deb230a", "title": "Fault Handling And Safe Mode", "category": "general", "size": 28}, {"id": "doc_434", "label": "Ground Station Operations", "group": "Document", "doc_id": "doc_e4938355", "title": "Ground Station Operations", "category": "ops/ground-station", "size": 28}, {"id": "doc_435", "label": "Your Documentation Directory", "group": "Document", "doc_id": "doc_d376663e", "title": "Your Documentation Directory", "category": "your_docs_here", "size": 28}, {"id": "doc_436", "label": "Launch and Deployment Sequence", "group": "Document", "doc_id": "doc_fbc6a4b6", "title": "Launch and Deployment Sequence", "category": "operations/launch", "size": 28}, {"id": "doc_437", "label": "Mission Case Study: Example CubeSat", "group": "Document", "doc_id": "doc_41b9d1bb", "title": "Mission Case Study: Example CubeSat", "category": "ops/mission-case-study", "size": 28}, {"id": "doc_438", "label": "Onboard Computer", "group": "Document", "doc_id": "doc_287310b7", "title": "Onboard Computer", "category": "subsystems/obc", "size": 28}, {"id": "doc_439", "label": "CubeSat Mission Overview", "group": "Document", "doc_id": "doc_8226f870", "title": "CubeSat Mission Overview", "category": "subsystems/overview", "size": 28}, {"id": "doc_440", "label": "Power Subsystem", "group": "Document", "doc_id": "doc_4969e6d2", "title": "Power Subsystem", "category": "subsystems/power", "size": 28}, {"id": "doc_441", "label": "Telemetry and Anomaly Detection", "group": "Document", "doc_id": "doc_5105ead2", "title": "Telemetry and Anomaly Detection", "category": "operations/telemetry", "size": 28}, {"id": "doc_442", "label": "Thermal Subsystem", "group": "Document", "doc_id": "doc_b934e5f0", "title": "Thermal Subsystem", "category": "subsystems/thermal", "size": 28}, {"id": "chk_443", "label": "Chunk #0", "group": "Chunk", "chunk_id": "2832c61e-d715-4e45-ae52-a6efa0b7f290", "position": 0, "preview": "# ADCS \u2014 Attitude Determination and Control\n\nThe Attitude Determination and Control Subsystem (ADCS) is responsible for knowing which way the spacecra", "category": null, "size": 12}, {"id": "chk_444", "label": "Chunk #1", "group": "Chunk", "chunk_id": "f24ba0fa-e320-4efb-8603-91b4910384b9", "position": 1, "preview": "## Actuators and Sensors\n\nReaction wheels are the primary fine-pointing actuator on most three-axis-stabilized CubeSats: spinning a small flywheel fas", "category": null, "size": 12}, {"id": "chk_445", "label": "Chunk #2", "group": "Chunk", "chunk_id": "2995f985-e1f6-4fa7-b3d1-7d9600f03cfb", "position": 2, "preview": "| Sensor Type | Measurement | Typical Accuracy |\n|---|---|---|\n| Gyroscope | Angular rate | 0.01\u20131 deg/s bias drift |\n| Sun sensor | Sun vector | 0.1\u2013", "category": null, "size": 12}, {"id": "chk_446", "label": "Chunk #3", "group": "Chunk", "chunk_id": "481a2c01-2e08-45ba-a6d1-fd09d82239f1", "position": 3, "preview": "![Three-axis attitude control diagram showing reaction wheel orientation and body axes for pitch, roll, and yaw](attitude-control-3axis-diagram.png)", "category": null, "size": 12}, {"id": "chk_447", "label": "Chunk #4", "group": "Chunk", "chunk_id": "8db66f9b-8af2-4855-9113-153ca53e7fe1", "position": 4, "preview": "## Reaction Wheel Heat and Degradation\n\nReaction wheels are also one of the subsystem's closest links to the thermal subsystem: bearing friction gener", "category": null, "size": 12}, {"id": "chk_448", "label": "Chunk #5", "group": "Chunk", "chunk_id": "8d8f2c68-3468-4285-8baa-464635ab463b", "position": 5, "preview": "## Attitude Control Modes\n\nMost missions define a small set of attitude control modes: a detumble mode right after deployment, a sun-pointing safe mod", "category": null, "size": 12}, {"id": "chk_449", "label": "Chunk #0", "group": "Chunk", "chunk_id": "750bdb0f-30dc-4c2f-a862-eee5888729b8", "position": 0, "preview": "A CubeSat's communications subsystem is what turns an orbiting piece of hardware into something operators can actually talk to. It handles two directi", "category": null, "size": 12}, {"id": "chk_450", "label": "Chunk #1", "group": "Chunk", "chunk_id": "123a0d31-3ed3-47a2-b1f2-010ea90e352d", "position": 1, "preview": "uch more telemetry and payload data there typically is to send home compared to commands going up.\n\nFrequency band choice shapes almost everything els", "category": null, "size": 12}, {"id": "chk_451", "label": "Chunk #2", "group": "Chunk", "chunk_id": "4a49d55e-bdb1-4000-80e3-173a63a6255c", "position": 2, "preview": "pically demands a more directional antenna and tighter pointing control to close the link reliably. Some missions carry both: a low-rate UHF link for ", "category": null, "size": 12}, {"id": "chk_452", "label": "Chunk #3", "group": "Chunk", "chunk_id": "4f44ee05-c5ab-4acf-b36c-6070bac2776a", "position": 3, "preview": "oss over the slant range to the ground station, atmospheric losses, and the receiver's noise floor. If the link budget doesn't leave enough margin, pa", "category": null, "size": 12}, {"id": "chk_453", "label": "Chunk #4", "group": "Chunk", "chunk_id": "938f98ac-9cab-48f1-9a7b-11e19b534235", "position": 4, "preview": "antennas are common for UHF and VHF, since they're simple, lightweight, and reasonably omnidirectional, which helps when the spacecraft's attitude isn", "category": null, "size": 12}, {"id": "chk_454", "label": "Chunk #5", "group": "Chunk", "chunk_id": "a5c58bf5-92fa-442a-aada-848220ca2e9b", "position": 5, "preview": "longside whatever payload data has queued up since the last pass, and the uplink is used to send any new commands or software updates the mission need", "category": null, "size": 12}, {"id": "chk_455", "label": "Chunk #0", "group": "Chunk", "chunk_id": "65f7dcb6-dc3d-49f4-bd52-ab8bf1005152", "position": 0, "preview": "Fault Handling and Safe Mode \u2014 Docs\nbody { font-family: Helvetica, Arial, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; color: #22", "category": null, "size": 12}, {"id": "chk_456", "label": "Chunk #1", "group": "Chunk", "chunk_id": "99151ab0-26fc-4759-bd16-a7e69d9ce4fa", "position": 1, "preview": "ter; }\nfigure img { max-width: 100%; border: 1px solid #ccc; }\nfigcaption { font-size: 13px; color: #555; margin-top: 8px; font-style: italic; }\nnav {", "category": null, "size": 12}, {"id": "chk_457", "label": "Chunk #2", "group": "Chunk", "chunk_id": "3e22cd3f-9842-4eb2-a4c6-c13fa851a7c0", "position": 2, "preview": "software on the onboard computer continuously evaluates telemetry against expected nominal ranges. When a parameter drifts or crosses a limit repeated", "category": null, "size": 12}, {"id": "chk_458", "label": "Chunk #3", "group": "Chunk", "chunk_id": "6e99ad58-57e6-45c6-aa78-1d7dca17f429", "position": 3, "preview": "ault Detection Logic\nEach telemetry parameter is checked on every sample against its nominal range. A single out-of-range sample increments a per-para", "category": null, "size": 12}, {"id": "chk_459", "label": "Chunk #4", "group": "Chunk", "chunk_id": "d7a051ee-9819-4e89-bd8e-206c6fcafcd2", "position": 4, "preview": "bles non-essential loads until an operator can review the situation during the next ground contact.\nFigure 1. Onboard fault detection and safe mode tr", "category": null, "size": 12}, {"id": "chk_460", "label": "Chunk #5", "group": "Chunk", "chunk_id": "46fb7661-e783-45ba-8ded-8b7813305c57", "position": 5, "preview": "emetry sample\nLog only; no action taken\nLevel 2 \u2014 Warning\nFault counter below safe-mode threshold\nLog and continue monitoring at increased sample rate", "category": null, "size": 12}, {"id": "chk_461", "label": "Chunk #6", "group": "Chunk", "chunk_id": "890f6e3d-98c8-457f-8e51-05dd55fc6ad7", "position": 6, "preview": "itude and waits for ground contact rather than attempting to self-diagnose further, since diagnosis usually benefits from a human reviewing the accumu", "category": null, "size": 12}, {"id": "chk_462", "label": "Chunk #7", "group": "Chunk", "chunk_id": "52e04d77-bf6d-47e4-8105-64dcdf545e81", "position": 7, "preview": "me escalation pattern, driven by telemetry and fault counters rather than single-sample triggers, is what allowed operators to catch and manage the re", "category": null, "size": 12}, {"id": "chk_463", "label": "Chunk #0", "group": "Chunk", "chunk_id": "d05423d9-490a-4dfc-bd31-ad2905190b4c", "position": 0, "preview": "# Ground Station Operations\n\nOperating a CubeSat is as much about the ground segment as it is about the spacecraft itself. A ground station tracks the", "category": null, "size": 12}, {"id": "chk_464", "label": "Chunk #1", "group": "Chunk", "chunk_id": "9a6651f0-42cf-4b8d-a582-b7cfe0abad46", "position": 1, "preview": "## Pass Planning and Scheduling\n\nBecause a CubeSat in low Earth orbit is only visible from a given ground station for a handful of minutes several tim", "category": null, "size": 12}, {"id": "chk_465", "label": "Chunk #2", "group": "Chunk", "chunk_id": "b1752c3a-a636-4f48-868a-c8eb8a7ca972", "position": 2, "preview": "## Antenna Pointing and Doppler Correction\n\nGround antennas track the spacecraft's predicted path across the sky in azimuth and elevation, and because", "category": null, "size": 12}, {"id": "chk_466", "label": "Chunk #3", "group": "Chunk", "chunk_id": "7d5f6d3d-9008-4ca8-b5fe-9e9102df5754", "position": 3, "preview": "## Link Budget in Practice\n\nEvery pass is ultimately governed by the same link budget introduced in the communications subsystem: transmit power, ante", "category": null, "size": 12}, {"id": "chk_467", "label": "Chunk #4", "group": "Chunk", "chunk_id": "6e906ab7-7046-4940-9698-d0f40553cd2e", "position": 4, "preview": "## Telemetry Downlink\n\nThe telemetry downlinked during each pass is the primary source of spacecraft health data for the operations team: bus voltages", "category": null, "size": 12}, {"id": "chk_468", "label": "Chunk #0", "group": "Chunk", "chunk_id": "f244f9bb-8b20-4daf-873d-0f0908de04ed", "position": 0, "preview": "# Your Documentation Directory\n\nThis directory is where you add your markdown documents to be processed and imported into the GraphRAG hybrid retrieva", "category": null, "size": 12}, {"id": "chk_469", "label": "Chunk #1", "group": "Chunk", "chunk_id": "174927c1-dc5f-4017-8e6d-271f1b37eb7e", "position": 1, "preview": "## How to Use This Directory\n\n1. **Add Your Documents**: Place your markdown (`.md`) files in this directory\n2. **Run the Import Script**: Execute `py", "category": null, "size": 12}, {"id": "chk_470", "label": "Chunk #2", "group": "Chunk", "chunk_id": "686c7e64-0662-4f97-acf3-c0c7b39ccc77", "position": 2, "preview": "## Document Format Requirements\n\nFor optimal results, your documents should follow this structure:", "category": null, "size": 12}, {"id": "chk_471", "label": "Chunk #3", "group": "Chunk", "chunk_id": "d215cfbd-a08a-4968-a5b6-39c5ff0c1302", "position": 3, "preview": "### Front Matter Format (Required)\n\nInclude YAML front matter at the beginning of your documents with these fields:", "category": null, "size": 12}, {"id": "chk_472", "label": "Chunk #4", "group": "Chunk", "chunk_id": "6d5c13fb-c078-46f6-a031-213edca499cc", "position": 4, "preview": "```yaml\n---\ntitle: \"Document Title\"          # The title of your document (required)\ncategory: \"path/to/category\"     # Category path for organization", "category": null, "size": 12}, {"id": "chk_473", "label": "Chunk #5", "group": "Chunk", "chunk_id": "0762c2fd-6a9c-4f72-b49c-09c0c9c5edaf", "position": 5, "preview": "### Document Structure\n\n- Start with a single `# Title` (H1) heading after the front matter\n- Use proper heading hierarchy (`##`, `###`, etc.)\n- Inclu", "category": null, "size": 12}, {"id": "chk_474", "label": "Chunk #6", "group": "Chunk", "chunk_id": "82fff203-aa6a-43a9-a432-67fac918fbd5", "position": 6, "preview": "## Example Document\n\nSee the included `analytics_example.md` file for a comprehensive example of the recommended document format.", "category": null, "size": 12}, {"id": "chk_475", "label": "Chunk #7", "group": "Chunk", "chunk_id": "b5adbcfe-9eb8-4dfa-b8b8-1e9b49dabfbf", "position": 7, "preview": "## Importing Documents\n\nTo import your documents into the GraphRAG system:", "category": null, "size": 12}, {"id": "chk_476", "label": "Chunk #8", "group": "Chunk", "chunk_id": "c86d39f8-789b-4237-ba6d-6824acd2127a", "position": 8, "preview": "```bash\n# Import all documents from this directory\npython scripts/import_docs.py --docs-dir your_docs_here/\n\n# Or import specific documents\npython scr", "category": null, "size": 12}, {"id": "chk_477", "label": "Chunk #9", "group": "Chunk", "chunk_id": "130850be-8cf9-40ab-816e-1fa5bc6070ab", "position": 9, "preview": "## Processing Details\n\nWhen you run the import script, the system will:\n\n1. Parse each markdown file and extract front matter metadata\n2. Split the co", "category": null, "size": 12}, {"id": "chk_478", "label": "Chunk #10", "group": "Chunk", "chunk_id": "3fa17ab7-0b76-4a9c-b190-64b45d281df6", "position": 10, "preview": "## Notes\n\n- Place your actual documentation files in this directory\n- Remove the example documents before adding your own content if desired\n- The sys", "category": null, "size": 12}, {"id": "chk_479", "label": "Chunk #0", "group": "Chunk", "chunk_id": "2cd8d443-4638-4f70-8010-93fe8f2b68e6", "position": 0, "preview": "# **Launch and Deployment Sequence** \n\nThe interval between separation from the launch deployer and the start of routine operations is the highest-ris", "category": null, "size": 12}, {"id": "chk_480", "label": "Chunk #1", "group": "Chunk", "chunk_id": "cd0fda85-9590-4ee8-ae71-11170c8d05c5", "position": 1, "preview": "## **Deployment Event Sequence** \n\nImmediately after separation, a preprogrammed inhibit delay holds off any deployments or radio transmissions for a ", "category": null, "size": 12}, {"id": "chk_481", "label": "Chunk #2", "group": "Chunk", "chunk_id": "9a77aed3-747a-4a52-a5c3-f77f37aa6d75", "position": 2, "preview": "## **Deployment Milestone Table**", "category": null, "size": 12}, {"id": "chk_482", "label": "Chunk #3", "group": "Chunk", "chunk_id": "aab60e71-6148-4bf0-9671-7509d4e6502b", "position": 3, "preview": "|**Event**|**Time Post-Separation**|**Primary Subsystem**|\n|---|---|---|\n|Separation from deployer|T+0|Structure|\n|Detumble begins|T+2 min|ADCS|\n|Sola", "category": null, "size": 12}, {"id": "chk_483", "label": "Chunk #4", "group": "Chunk", "chunk_id": "1e5d80f2-f4ab-41a2-81e0-db2711346166", "position": 4, "preview": "## **Early Power Profile** \n\nBattery state of charge is the single most closely watched telemetry parameter during the first few orbits, since the spa", "category": null, "size": 12}, {"id": "chk_484", "label": "Chunk #5", "group": "Chunk", "chunk_id": "697641e9-045d-4848-88dd-97294b0cdb4c", "position": 5, "preview": "panel pointing becomes more consistent \u2014 a battery that fails to recover between eclipses during this window is treated as an early commissioning anom", "category": null, "size": 12}, {"id": "chk_485", "label": "Chunk #6", "group": "Chunk", "chunk_id": "c7d37f7c-afb4-43e0-8e84-8743adbfa390", "position": 6, "preview": "t: once the spacecraft settles into nominal operations, any parameter drifting away from the pattern established here is what flags a developing issue", "category": null, "size": 12}, {"id": "chk_486", "label": "Chunk #0", "group": "Chunk", "chunk_id": "eb96fe9c-e356-41ed-a78a-5f85e7883f2d", "position": 0, "preview": "# Mission Case Study: Example CubeSat\n\nThis case study follows a fictional 3U CubeSat, referred to here as EX-1, through its mission life to illustrat", "category": null, "size": 12}, {"id": "chk_487", "label": "Chunk #1", "group": "Chunk", "chunk_id": "eab11bfd-8b45-4b0b-833e-a93784a3eff8", "position": 1, "preview": "## Launch and Commissioning\n\nEX-1 launched as a rideshare payload and was deployed into a sun-synchronous low Earth orbit. Within the first orbit, its", "category": null, "size": 12}, {"id": "chk_488", "label": "Chunk #2", "group": "Chunk", "chunk_id": "6231a96b-41a9-4e6d-ab98-7ab74469170d", "position": 2, "preview": "## Nominal Operations\n\nFor the first year of operations, EX-1 ran a routine cycle: fine-pointing at its payload targets during data-collection windows", "category": null, "size": 12}, {"id": "chk_489", "label": "Chunk #3", "group": "Chunk", "chunk_id": "c9016f3f-ab0e-4366-9f1c-22e4104e50c5", "position": 3, "preview": "## The Anomaly\n\nAbout fourteen months into the mission, ground operators reviewing downlinked telemetry noticed a small but persistent upward drift in", "category": null, "size": 12}, {"id": "chk_490", "label": "Chunk #4", "group": "Chunk", "chunk_id": "84c81fb9-0cdf-4fc3-af1b-b7b325b2e4eb", "position": 4, "preview": "ssive passes showed a clear, steady climb that stood out against the wheel's established baseline.\n\nOperators cross-checked the affected wheel's telem", "category": null, "size": 12}, {"id": "chk_491", "label": "Chunk #5", "group": "Chunk", "chunk_id": "d622bf31-63b1-4796-9ca1-708e11dd30ef", "position": 5, "preview": "onto the two healthier wheels and the magnetorquers, trading a small amount of pointing precision for a meaningful reduction in the degrading wheel's ", "category": null, "size": 12}, {"id": "chk_492", "label": "Chunk #6", "group": "Chunk", "chunk_id": "e4d5512f-66dd-4342-88e9-ec5e4c98dc53", "position": 6, "preview": "## Workaround and Recovery\n\nThe reduced-speed workaround stabilized the wheel's temperature trend within a few weeks, and the power budget absorbed th", "category": null, "size": 12}, {"id": "chk_493", "label": "Chunk #7", "group": "Chunk", "chunk_id": "e3b01d79-aee3-402f-a174-6a05ddc8fc74", "position": 7, "preview": "## End of Mission\n\nEX-1 continued science operations for the remainder of its planned lifetime under the adjusted wheel configuration. At end of life,", "category": null, "size": 12}, {"id": "chk_494", "label": "Chunk #0", "group": "Chunk", "chunk_id": "2d51fd90-2aa1-42bf-b75d-f15eee74f8ad", "position": 0, "preview": "Onboard Computer & Flight Software \u2014 Docs\nHome\nSubsystems\nAPI Reference\nDownloads\nSupport\nSearch documentation...\nOnboard Computer and Flight Software", "category": null, "size": 12}, {"id": "chk_495", "label": "Chunk #1", "group": "Chunk", "chunk_id": "5f827d0b-1e22-4cb0-acbb-8cd795da6613", "position": 1, "preview": "function, the OBC is typically the most heavily tested piece of hardware on the bus before launch.\nProcessor Selection\nOBC processor choice trades per", "category": null, "size": 12}, {"id": "chk_496", "label": "Chunk #2", "group": "Chunk", "chunk_id": "7b20a539-88f2-44aa-89be-e8f899a0e307", "position": 2, "preview": "80\u2013180 MHz\n0.1\u20130.3 W\nARM Cortex-A (SoC class)\n800 MHz\u20131.5 GHz\n1\u20133 W\nRadiation-hardened SPARC (e.g. LEON class)\n50\u2013100 MHz\n0.5\u20131.5 W\nFPGA-based (soft-c", "category": null, "size": 12}, {"id": "chk_497", "label": "Chunk #3", "group": "Chunk", "chunk_id": "4052f875-7126-44af-a2a7-d2b99932685d", "position": 3, "preview": "to the processor that can power-cycle the whole board if the processor itself becomes unresponsive.\nFault Handling and Software Updates\nFlight softwar", "category": null, "size": 12}, {"id": "chk_498", "label": "Chunk #4", "group": "Chunk", "chunk_id": "aa56e0b5-bf1f-48b0-8f0a-b06febde8496", "position": 4, "preview": "east severe end up to forcing the spacecraft into a safe, sun-pointing mode at the most severe end. Software updates are uploaded via the uplink in st", "category": null, "size": 12}, {"id": "chk_499", "label": "Chunk #5", "group": "Chunk", "chunk_id": "0c2b611c-f37e-42f6-9cd5-9bcffa39a5f1", "position": 5, "preview": "|", "category": null, "size": 12}, {"id": "chk_500", "label": "Chunk #6", "group": "Chunk", "chunk_id": "141cd45e-abd2-47bc-ab0c-d9659dfcd5a3", "position": 6, "preview": "Terms of Use", "category": null, "size": 12}, {"id": "chk_501", "label": "Chunk #7", "group": "Chunk", "chunk_id": "e15aeb6c-d92e-4990-996c-c5b59d7baea2", "position": 7, "preview": "|", "category": null, "size": 12}, {"id": "chk_502", "label": "Chunk #8", "group": "Chunk", "chunk_id": "2ad3d2d5-aba4-4ace-8c7f-834c6b2f4e0b", "position": 8, "preview": "Contact Us\nDocs build v4.12.0 \u2014 generated automatically. Report issues on the docs repository.", "category": null, "size": 12}, {"id": "chk_503", "label": "Chunk #0", "group": "Chunk", "chunk_id": "79cb9be7-4df8-4cc7-88f7-2947235e15b2", "position": 0, "preview": "# CubeSat Mission Overview\n\nA CubeSat is a small satellite built from standardized cubic units, typically 10 cm on a side (1U), and launched in multip", "category": null, "size": 12}, {"id": "chk_504", "label": "Chunk #1", "group": "Chunk", "chunk_id": "e1f36e5b-2e63-4701-993d-5eb264131f0a", "position": 1, "preview": "## Mission Phases\n\nEvery CubeSat mission moves through a similar sequence of phases from integration through disposal. The table below summarizes the ", "category": null, "size": 12}, {"id": "chk_505", "label": "Chunk #2", "group": "Chunk", "chunk_id": "aa0f862b-a9a9-4eb8-a6ef-d075caaef79b", "position": 2, "preview": "| Mission Phase | Typical Duration | Key Subsystem Activity |\n|---|---|---|\n| Integration & Test | 2\u20136 months | Power, OBC, and comms bring-up; enviro", "category": null, "size": 12}, {"id": "chk_506", "label": "Chunk #3", "group": "Chunk", "chunk_id": "f12dfcab-5be0-4140-b944-0a6b636b3ecf", "position": 3, "preview": "## Subsystem Summaries\n\n**Power** generates, stores, and distributes electrical energy using solar panels and onboard batteries, and it has to balance", "category": null, "size": 12}, {"id": "chk_507", "label": "Chunk #4", "group": "Chunk", "chunk_id": "0d2aea0d-f7f7-449a-879e-811da38dea8a", "position": 4, "preview": "e spacecraft using reaction wheels, magnetorquers, and sensors like gyroscopes and star trackers, which matters for pointing solar panels at the sun, ", "category": null, "size": 12}, {"id": "chk_508", "label": "Chunk #5", "group": "Chunk", "chunk_id": "5585189c-1092-4389-ad5b-6a491653e7d6", "position": 5, "preview": "ry other subsystem, handles fault detection and watchdog resets, and manages onboard data storage.\n\n**Propulsion**, when present, provides delta-v for", "category": null, "size": 12}, {"id": "chk_509", "label": "Chunk #6", "group": "Chunk", "chunk_id": "1723fcd6-2c7f-4be9-9eed-b55fcb88a9fb", "position": 6, "preview": "deeply interdependent: power budget constrains propulsion and payload duty cycles, thermal dissipation from batteries and reaction wheels drives therm", "category": null, "size": 12}, {"id": "chk_510", "label": "Chunk #0", "group": "Chunk", "chunk_id": "01ad9296-f993-4760-b980-429e982e3107", "position": 0, "preview": "# Power Subsystem\n\nThe power subsystem is responsible for generating, storing, conditioning, and distributing electrical energy to every other subsyst", "category": null, "size": 12}, {"id": "chk_511", "label": "Chunk #1", "group": "Chunk", "chunk_id": "359ac368-3f13-4264-b05b-bd79471f54b1", "position": 1, "preview": "## Solar Panels\n\nBody-mounted solar panels are the simplest option, covering the CubeSat's exterior faces, but deployable panels that unfold after lau", "category": null, "size": 12}, {"id": "chk_512", "label": "Chunk #2", "group": "Chunk", "chunk_id": "89ee503e-8c32-4bc4-a61d-2a7a63442868", "position": 2, "preview": "## Battery Chemistry\n\nThe battery stores energy generated during sunlit periods for use during eclipse and peak-load events. Chemistry choice trades e", "category": null, "size": 12}, {"id": "chk_513", "label": "Chunk #3", "group": "Chunk", "chunk_id": "6403a527-24b6-4f98-b375-0197e2ea76af", "position": 3, "preview": "| Chemistry | Energy Density (Wh/kg) | Cycle Life | Typical Use |\n|---|---|---|---|\n| Li-ion | 150\u2013250 | 500\u20131,000 cycles | Most common choice; high e", "category": null, "size": 12}, {"id": "chk_514", "label": "Chunk #4", "group": "Chunk", "chunk_id": "44b711d8-eca2-4613-b76b-8381c4480087", "position": 4, "preview": "## Power Budgeting\n\nA power budget tracks generation against consumption across a full orbit, accounting for eclipse duration, panel pointing, and the", "category": null, "size": 12}, {"id": "chk_515", "label": "Chunk #5", "group": "Chunk", "chunk_id": "5ab22a08-0422-42cc-b6de-87f7247b6c2e", "position": 5, "preview": "## Interaction with Thermal Dissipation\n\nBatteries are not perfectly efficient: charging and discharging both generate waste heat, and this thermal di", "category": null, "size": 12}, {"id": "chk_516", "label": "Chunk #0", "group": "Chunk", "chunk_id": "b11d0388-df46-43f2-90ad-5fed01e0fa8f", "position": 0, "preview": "# **Telemetry and Anomaly Detection** \n\nTelemetry is the continuous stream of housekeeping data a CubeSat produces about its own health: voltages, cur", "category": null, "size": 12}, {"id": "chk_517", "label": "Chunk #1", "group": "Chunk", "chunk_id": "3b0e9635-226c-4242-a671-2e40efd4edf0", "position": 1, "preview": "## **What Telemetry Data Looks Like** \n\nA typical telemetry frame is a timestamped snapshot of dozens to hundreds of parameters, downlinked either con", "category": null, "size": 12}, {"id": "chk_518", "label": "Chunk #2", "group": "Chunk", "chunk_id": "6e29bf97-ce2f-4bf6-9e53-2be1fd87eb2a", "position": 2, "preview": "## **Telemetry Parameters by Subsystem**", "category": null, "size": 12}, {"id": "chk_519", "label": "Chunk #3", "group": "Chunk", "chunk_id": "3bd0dfb1-1516-4464-8f58-fa70887c8a54", "position": 3, "preview": "|**Telemetry Parameter**|**Subsystem**|**Typical Nominal Range**|\n|---|---|---|\n|Battery voltage|Power|6.4\u20138.4 V (2S Li-ion)|\n|Battery temperature|Pow", "category": null, "size": 12}, {"id": "chk_520", "label": "Chunk #4", "group": "Chunk", "chunk_id": "c0a1f202-bc67-4377-89f1-6ffc5cd71d9e", "position": 4, "preview": "## **Statistical Anomaly Detection Basics** \n\nThe simplest anomaly detection technique is thresholding: flagging any parameter that falls outside a pr", "category": null, "size": 12}, {"id": "chk_521", "label": "Chunk #5", "group": "Chunk", "chunk_id": "9147309e-8ab8-4712-97bc-701af5477f02", "position": 5, "preview": "## **Why It Matters Across Subsystems** \n\nAnomaly detection only works well when it looks across subsystems rather than at one parameter in isolation.", "category": null, "size": 12}, {"id": "chk_522", "label": "Chunk #6", "group": "Chunk", "chunk_id": "ae16a191-482a-40ff-8f26-93f6334db91f", "position": 6, "preview": "d the reaction wheels feeds into the same spacecraft thermal environment, correlating power, thermal, and ADCS telemetry together is often the only wa", "category": null, "size": 12}, {"id": "chk_523", "label": "Chunk #7", "group": "Chunk", "chunk_id": "9f1bf5e6-3db6-4b9c-ad78-1223262cfe0c", "position": 7, "preview": "lly means comparing several passes' worth of link telemetry rather than judging a single contact. \n\nBecause battery behavior, reaction wheel health, t", "category": null, "size": 12}, {"id": "chk_524", "label": "Chunk #0", "group": "Chunk", "chunk_id": "a76254ea-3caf-469c-b18b-05e62f3796fb", "position": 0, "preview": "# Thermal Subsystem\n\nIn orbit, a CubeSat has no air around it to carry heat away by convection, so every watt of dissipated power has to leave the spa", "category": null, "size": 12}, {"id": "chk_525", "label": "Chunk #1", "group": "Chunk", "chunk_id": "3314635f-9c05-41ec-a4d2-5ffbebf41f8f", "position": 1, "preview": "## Passive vs. Active Thermal Control\n\nPassive control uses material selection, surface coatings, and insulation to shape how heat flows and radiates ", "category": null, "size": 12}, {"id": "chk_526", "label": "Chunk #2", "group": "Chunk", "chunk_id": "9b03289a-f945-4c61-9c99-f9c375b19a8d", "position": 2, "preview": "## Insulation and Radiators\n\nMulti-layer insulation (MLI) blankets \u2014 alternating layers of reflective film and low-conductivity spacer material \u2014 are ", "category": null, "size": 12}, {"id": "chk_527", "label": "Chunk #3", "group": "Chunk", "chunk_id": "48d78fd8-f046-4ba7-8703-f2eeca3ba34a", "position": 3, "preview": "| Material | Thermal Conductivity (W/m\u00b7K) | Typical Use |\n|---|---|---|\n| Aluminum 6061 | ~167 | Structural panels and heat spreaders |\n| MLI blanket ", "category": null, "size": 12}, {"id": "chk_528", "label": "Chunk #4", "group": "Chunk", "chunk_id": "7a8a3c14-e5e6-4eab-9502-7326381a95b0", "position": 4, "preview": "![Thermal gradient diagram showing temperature distribution across the spacecraft body from sun-facing to shadow-facing sides](thermal-gradient-diagra", "category": null, "size": 12}, {"id": "chk_529", "label": "Chunk #5", "group": "Chunk", "chunk_id": "5c3cb95c-b8a2-4bb0-a112-8b0144823674", "position": 5, "preview": "## Internal Heat Sources\n\nTwo of the largest internal heat sources on a typical CubeSat are the battery and the reaction wheels. Battery charge and di", "category": null, "size": 12}, {"id": "ent_530", "label": "Gyroscope", "group": "Entity", "name": "Gyroscope", "size": 18}, {"id": "ent_531", "label": "Sun sensor", "group": "Entity", "name": "Sun sensor", "size": 18}, {"id": "ent_532", "label": "Magnetometer", "group": "Entity", "name": "Magnetometer", "size": 18}, {"id": "ent_533", "label": "Star tracker", "group": "Entity", "name": "Star tracker", "size": 18}, {"id": "ent_534", "label": "ADCS", "group": "Entity", "name": "ADCS", "size": 18}, {"id": "ent_535", "label": "spacecraft", "group": "Entity", "name": "spacecraft", "size": 18}, {"id": "ent_536", "label": "solar panels", "group": "Entity", "name": "solar panels", "size": 18}, {"id": "ent_537", "label": "antennas", "group": "Entity", "name": "antennas", "size": 18}, {"id": "ent_538", "label": "payload sensors", "group": "Entity", "name": "payload sensors", "size": 18}, {"id": "ent_539", "label": "Reaction wheels", "group": "Entity", "name": "Reaction wheels", "size": 18}, {"id": "ent_540", "label": "Thermal subsystem", "group": "Entity", "name": "Thermal subsystem", "size": 18}, {"id": "ent_541", "label": "Magnetorquers", "group": "Entity", "name": "Magnetorquers", "size": 18}, {"id": "ent_542", "label": "Gyroscopes", "group": "Entity", "name": "Gyroscopes", "size": 18}, {"id": "ent_543", "label": "Sun sensors", "group": "Entity", "name": "Sun sensors", "size": 18}, {"id": "ent_544", "label": "Magnetometers", "group": "Entity", "name": "Magnetometers", "size": 18}, {"id": "ent_545", "label": "Star trackers", "group": "Entity", "name": "Star trackers", "size": 18}, {"id": "ent_546", "label": "Attitude control modes", "group": "Entity", "name": "Attitude control modes", "size": 18}, {"id": "ent_547", "label": "Detumble mode", "group": "Entity", "name": "Detumble mode", "size": 18}, {"id": "ent_548", "label": "Sun-pointing safe mode", "group": "Entity", "name": "Sun-pointing safe mode", "size": 18}, {"id": "ent_549", "label": "Fine-pointing operational mode", "group": "Entity", "name": "Fine-pointing operational mode", "size": 18}, {"id": "ent_550", "label": "uplink", "group": "Entity", "name": "uplink", "size": 18}, {"id": "ent_551", "label": "payload data", "group": "Entity", "name": "payload data", "size": 18}, {"id": "ent_552", "label": "contact window", "group": "Entity", "name": "contact window", "size": 18}, {"id": "ent_553", "label": "CubeSat", "group": "Entity", "name": "CubeSat", "size": 18}, {"id": "ent_554", "label": "downlink", "group": "Entity", "name": "downlink", "size": 18}, {"id": "ent_555", "label": "ground station", "group": "Entity", "name": "ground station", "size": 18}, {"id": "ent_556", "label": "UHF", "group": "Entity", "name": "UHF", "size": 18}, {"id": "ent_557", "label": "VHF", "group": "Entity", "name": "VHF", "size": 18}, {"id": "ent_558", "label": "S-band", "group": "Entity", "name": "S-band", "size": 18}, {"id": "ent_559", "label": "patch antenna", "group": "Entity", "name": "patch antenna", "size": 18}, {"id": "ent_560", "label": "telemetry", "group": "Entity", "name": "telemetry", "size": 18}, {"id": "ent_561", "label": "commands", "group": "Entity", "name": "commands", "size": 18}, {"id": "ent_562", "label": "link budget", "group": "Entity", "name": "link budget", "size": 18}, {"id": "ent_563", "label": "atmospheric losses", "group": "Entity", "name": "atmospheric losses", "size": 18}, {"id": "ent_564", "label": "fault log", "group": "Entity", "name": "fault log", "size": 18}, {"id": "ent_565", "label": "telemetry trends", "group": "Entity", "name": "telemetry trends", "size": 18}, {"id": "ent_566", "label": "fault handling", "group": "Entity", "name": "fault handling", "size": 18}, {"id": "ent_567", "label": "fault counters", "group": "Entity", "name": "fault counters", "size": 18}], "graph_edges": [{"from": "doc_431", "to": "chk_443", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_431", "to": "chk_444", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_443", "to": "chk_444", "label": "NEXT", "type": "NEXT"}, {"from": "doc_431", "to": "chk_445", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_444", "to": "chk_445", "label": "NEXT", "type": "NEXT"}, {"from": "doc_431", "to": "chk_446", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_445", "to": "chk_446", "label": "NEXT", "type": "NEXT"}, {"from": "doc_431", "to": "chk_447", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_446", "to": "chk_447", "label": "NEXT", "type": "NEXT"}, {"from": "doc_431", "to": "chk_448", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_447", "to": "chk_448", "label": "NEXT", "type": "NEXT"}, {"from": "doc_432", "to": "chk_449", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_432", "to": "chk_450", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_449", "to": "chk_450", "label": "NEXT", "type": "NEXT"}, {"from": "doc_432", "to": "chk_451", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_450", "to": "chk_451", "label": "NEXT", "type": "NEXT"}, {"from": "doc_432", "to": "chk_452", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_451", "to": "chk_452", "label": "NEXT", "type": "NEXT"}, {"from": "doc_432", "to": "chk_453", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_452", "to": "chk_453", "label": "NEXT", "type": "NEXT"}, {"from": "doc_432", "to": "chk_454", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_453", "to": "chk_454", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_455", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_433", "to": "chk_456", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_455", "to": "chk_456", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_457", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_456", "to": "chk_457", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_458", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_457", "to": "chk_458", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_459", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_458", "to": "chk_459", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_460", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_459", "to": "chk_460", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_461", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_460", "to": "chk_461", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "chk_462", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_461", "to": "chk_462", "label": "NEXT", "type": "NEXT"}, {"from": "doc_434", "to": "chk_463", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_434", "to": "chk_464", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_463", "to": "chk_464", "label": "NEXT", "type": "NEXT"}, {"from": "doc_434", "to": "chk_465", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_464", "to": "chk_465", "label": "NEXT", "type": "NEXT"}, {"from": "doc_434", "to": "chk_466", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_465", "to": "chk_466", "label": "NEXT", "type": "NEXT"}, {"from": "doc_434", "to": "chk_467", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_466", "to": "chk_467", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_468", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_435", "to": "chk_469", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_468", "to": "chk_469", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_470", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_469", "to": "chk_470", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_471", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_470", "to": "chk_471", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_472", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_471", "to": "chk_472", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_473", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_472", "to": "chk_473", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_474", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_473", "to": "chk_474", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_475", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_474", "to": "chk_475", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_476", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_475", "to": "chk_476", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_477", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_476", "to": "chk_477", "label": "NEXT", "type": "NEXT"}, {"from": "doc_435", "to": "chk_478", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_477", "to": "chk_478", "label": "NEXT", "type": "NEXT"}, {"from": "doc_436", "to": "chk_479", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_436", "to": "chk_480", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_479", "to": "chk_480", "label": "NEXT", "type": "NEXT"}, {"from": "doc_436", "to": "chk_481", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_480", "to": "chk_481", "label": "NEXT", "type": "NEXT"}, {"from": "doc_436", "to": "chk_482", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_481", "to": "chk_482", "label": "NEXT", "type": "NEXT"}, {"from": "doc_436", "to": "chk_483", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_482", "to": "chk_483", "label": "NEXT", "type": "NEXT"}, {"from": "doc_436", "to": "chk_484", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_483", "to": "chk_484", "label": "NEXT", "type": "NEXT"}, {"from": "doc_436", "to": "chk_485", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_484", "to": "chk_485", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_486", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_437", "to": "chk_487", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_486", "to": "chk_487", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_488", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_487", "to": "chk_488", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_489", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_488", "to": "chk_489", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_490", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_489", "to": "chk_490", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_491", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_490", "to": "chk_491", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_492", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_491", "to": "chk_492", "label": "NEXT", "type": "NEXT"}, {"from": "doc_437", "to": "chk_493", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_492", "to": "chk_493", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_494", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_438", "to": "chk_495", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_494", "to": "chk_495", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_496", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_495", "to": "chk_496", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_497", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_496", "to": "chk_497", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_498", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_497", "to": "chk_498", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_499", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_498", "to": "chk_499", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_500", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_499", "to": "chk_500", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_501", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_500", "to": "chk_501", "label": "NEXT", "type": "NEXT"}, {"from": "doc_438", "to": "chk_502", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_501", "to": "chk_502", "label": "NEXT", "type": "NEXT"}, {"from": "doc_439", "to": "chk_503", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_439", "to": "chk_504", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_503", "to": "chk_504", "label": "NEXT", "type": "NEXT"}, {"from": "doc_439", "to": "chk_505", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_504", "to": "chk_505", "label": "NEXT", "type": "NEXT"}, {"from": "doc_439", "to": "chk_506", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_505", "to": "chk_506", "label": "NEXT", "type": "NEXT"}, {"from": "doc_439", "to": "chk_507", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_506", "to": "chk_507", "label": "NEXT", "type": "NEXT"}, {"from": "doc_439", "to": "chk_508", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_507", "to": "chk_508", "label": "NEXT", "type": "NEXT"}, {"from": "doc_439", "to": "chk_509", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_508", "to": "chk_509", "label": "NEXT", "type": "NEXT"}, {"from": "doc_440", "to": "chk_510", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_440", "to": "chk_511", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_510", "to": "chk_511", "label": "NEXT", "type": "NEXT"}, {"from": "doc_440", "to": "chk_512", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_511", "to": "chk_512", "label": "NEXT", "type": "NEXT"}, {"from": "doc_440", "to": "chk_513", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_512", "to": "chk_513", "label": "NEXT", "type": "NEXT"}, {"from": "doc_440", "to": "chk_514", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_513", "to": "chk_514", "label": "NEXT", "type": "NEXT"}, {"from": "doc_440", "to": "chk_515", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_514", "to": "chk_515", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_516", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_441", "to": "chk_517", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_516", "to": "chk_517", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_518", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_517", "to": "chk_518", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_519", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_518", "to": "chk_519", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_520", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_519", "to": "chk_520", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_521", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_520", "to": "chk_521", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_522", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_521", "to": "chk_522", "label": "NEXT", "type": "NEXT"}, {"from": "doc_441", "to": "chk_523", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_522", "to": "chk_523", "label": "NEXT", "type": "NEXT"}, {"from": "doc_442", "to": "chk_524", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "doc_442", "to": "chk_525", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_524", "to": "chk_525", "label": "NEXT", "type": "NEXT"}, {"from": "doc_442", "to": "chk_526", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_525", "to": "chk_526", "label": "NEXT", "type": "NEXT"}, {"from": "doc_442", "to": "chk_527", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_526", "to": "chk_527", "label": "NEXT", "type": "NEXT"}, {"from": "doc_442", "to": "chk_528", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_527", "to": "chk_528", "label": "NEXT", "type": "NEXT"}, {"from": "doc_442", "to": "chk_529", "label": "HAS_CHUNK", "type": "HAS_CHUNK"}, {"from": "chk_528", "to": "chk_529", "label": "NEXT", "type": "NEXT"}, {"from": "doc_433", "to": "doc_432", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "doc_432", "to": "doc_433", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_445", "to": "ent_530", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_445", "to": "ent_531", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_445", "to": "ent_532", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_445", "to": "ent_533", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_530", "to": "ent_531", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_530", "to": "ent_532", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_530", "to": "ent_533", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_531", "to": "ent_532", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_531", "to": "ent_533", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_532", "to": "ent_533", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_443", "to": "ent_534", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_443", "to": "ent_535", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_443", "to": "ent_536", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_443", "to": "ent_537", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_443", "to": "ent_538", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_534", "to": "ent_535", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_534", "to": "ent_536", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_534", "to": "ent_537", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_534", "to": "ent_538", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_447", "to": "ent_539", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_447", "to": "ent_540", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_539", "to": "ent_540", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_444", "to": "ent_539", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_444", "to": "ent_541", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_444", "to": "ent_542", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_444", "to": "ent_543", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_444", "to": "ent_544", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_444", "to": "ent_545", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_539", "to": "ent_541", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_539", "to": "ent_542", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_539", "to": "ent_543", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_539", "to": "ent_544", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_539", "to": "ent_545", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_448", "to": "ent_546", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_448", "to": "ent_547", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_448", "to": "ent_548", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_448", "to": "ent_549", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_546", "to": "ent_547", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_546", "to": "ent_548", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_546", "to": "ent_549", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_454", "to": "ent_550", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_454", "to": "ent_551", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_454", "to": "ent_552", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_550", "to": "ent_551", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_550", "to": "ent_552", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_449", "to": "ent_553", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_449", "to": "ent_550", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_449", "to": "ent_554", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_449", "to": "ent_555", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_449", "to": "ent_535", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_553", "to": "ent_550", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_553", "to": "ent_554", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_550", "to": "ent_555", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_554", "to": "ent_555", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_553", "to": "ent_535", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_453", "to": "ent_537", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_453", "to": "ent_556", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_453", "to": "ent_557", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_453", "to": "ent_558", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_453", "to": "ent_559", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_537", "to": "ent_556", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_537", "to": "ent_557", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_559", "to": "ent_558", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_450", "to": "ent_560", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_450", "to": "ent_551", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_450", "to": "ent_561", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_560", "to": "ent_551", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_560", "to": "ent_561", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_451", "to": "ent_556", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_451", "to": "ent_558", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_451", "to": "ent_537", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_556", "to": "ent_537", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_558", "to": "ent_537", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_452", "to": "ent_562", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_452", "to": "ent_555", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_452", "to": "ent_563", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_562", "to": "ent_555", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_562", "to": "ent_563", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_461", "to": "ent_537", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_461", "to": "ent_564", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_461", "to": "ent_565", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_537", "to": "ent_564", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_537", "to": "ent_565", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "chk_456", "to": "ent_566", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_456", "to": "ent_560", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "chk_456", "to": "ent_567", "label": "MENTIONS", "type": "MENTIONS"}, {"from": "ent_566", "to": "ent_560", "label": "RELATED_TO", "type": "RELATED_TO"}, {"from": "ent_567", "to": "ent_560", "label": "RELATED_TO", "type": "RELATED_TO"}], "stats": {"total_vectors": 87, "total_documents": 12, "total_chunks": 87, "total_entities": 38, "total_relations": 252, "pca_variance": [0.1184731125831604, 0.08224885910749435, 0.06193433329463005]}};
+
+    let currentDim = '2d';
+    let network = null;
+    let graphData = null;
+
+    // --- TAB SWITCHING ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      
+      const targetBtn = event ? event.currentTarget : document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+      if (targetBtn) targetBtn.classList.add('active');
+      
+      const panel = document.getElementById(`tab-${tabId}`);
+      if (panel) panel.classList.add('active');
+
+      if (tabId === 'vector') {
+        setTimeout(() => Plotly.Plots.resize('vector-plot'), 50);
+      } else if (tabId === 'graph') {
+        if (!network) initGraph();
+        setTimeout(() => network.fit(), 50);
+      }
+    }
+
+    // --- VECTOR PLOT (PLOTLY) ---
+    function initVectorPlot() {
+      updateVectorPlot();
+    }
+
+    function setVectorDim(dim) {
+      currentDim = dim;
+      document.getElementById('btn-2d').classList.toggle('active', dim === '2d');
+      document.getElementById('btn-3d').classList.toggle('active', dim === '3d');
+      updateVectorPlot();
+    }
+
+    function updateVectorPlot() {
+      const colorField = document.getElementById('vector-color-select').value;
+      const pts = DATA.vector_points;
+
+      // Group points by colorField
+      const groups = {};
+      pts.forEach(p => {
+        const key = p[colorField] || 'Other';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      });
+
+      const traces = [];
+      const colors = [
+        '#00f2fe', '#4facfe', '#9d4edd', '#f59e0b', '#10b981', 
+        '#f43f5e', '#ec4899', '#8b5cf6', '#3b82f6', '#14b8a6', 
+        '#eab308', '#f97316'
+      ];
+      let colIdx = 0;
+
+      for (const [groupName, groupPts] of Object.entries(groups)) {
+        const color = colors[colIdx % colors.length];
+        colIdx++;
+
+        if (currentDim === '2d') {
+          traces.push({
+            name: groupName,
+            x: groupPts.map(p => p.x2d),
+            y: groupPts.map(p => p.y2d),
+            mode: 'markers',
+            type: 'scatter',
+            customdata: groupPts,
+            marker: {
+              size: 9,
+              color: color,
+              opacity: 0.82,
+              line: { color: '#ffffff', width: 0.5 }
+            },
+            hovertemplate: '<b>%{customdata.title}</b><br>Chunk #%{customdata.position}<br><i>%{customdata.category}</i><extra></extra>'
+          });
+        } else {
+          traces.push({
+            name: groupName,
+            x: groupPts.map(p => p.x3d),
+            y: groupPts.map(p => p.y3d),
+            z: groupPts.map(p => p.z3d),
+            mode: 'markers',
+            type: 'scatter3d',
+            customdata: groupPts,
+            marker: {
+              size: 5,
+              color: color,
+              opacity: 0.85
+            },
+            hovertemplate: '<b>%{customdata.title}</b><br>Chunk #%{customdata.position}<extra></extra>'
+          });
+        }
+      }
+
+      const layout = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { family: 'Outfit, sans-serif', color: '#94a3b8' },
+        margin: { l: 40, r: 20, t: 30, b: 40 },
+        legend: {
+          orientation: 'h',
+          y: -0.15,
+          font: { size: 10, color: '#cbd5e1' }
+        },
+        hoverlabel: {
+          bgcolor: '#1e293b',
+          bordercolor: '#334155',
+          font: { family: 'Outfit', color: '#f8fafc' }
+        }
+      };
+
+      if (currentDim === '2d') {
+        layout.xaxis = { gridcolor: 'rgba(255,255,255,0.06)', zerolinecolor: 'rgba(255,255,255,0.1)' };
+        layout.yaxis = { gridcolor: 'rgba(255,255,255,0.06)', zerolinecolor: 'rgba(255,255,255,0.1)' };
+      } else {
+        layout.scene = {
+          xaxis: { gridcolor: 'rgba(255,255,255,0.08)', backgroundcolor: 'rgba(0,0,0,0)' },
+          yaxis: { gridcolor: 'rgba(255,255,255,0.08)', backgroundcolor: 'rgba(0,0,0,0)' },
+          zaxis: { gridcolor: 'rgba(255,255,255,0.08)', backgroundcolor: 'rgba(0,0,0,0)' }
+        };
+      }
+
+      const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        toImageButtonOptions: {
+          format: 'png',
+          filename: 'graphrag_vector_space',
+          height: 900,
+          width: 1400,
+          scale: 2
+        }
+      };
+
+      Plotly.react('vector-plot', traces, layout, config);
+
+      const plotEl = document.getElementById('vector-plot');
+      plotEl.on('plotly_hover', function(data) {
+        if (data.points.length > 0) {
+          showChunkDetail(data.points[0].customdata);
+        }
+      });
+
+      plotEl.on('plotly_click', function(data) {
+        if (data.points.length > 0) {
+          showChunkDetail(data.points[0].customdata);
+        }
+      });
+    }
+
+    function showChunkDetail(item) {
+      const drawer = document.getElementById('vector-drawer-content');
+      drawer.className = '';
+      drawer.innerHTML = `
+        <div class="detail-item">
+          <span class="key">Document Title</span>
+          <span class="val" style="font-weight:600; color:var(--accent-cyan);">${item.title}</span>
+        </div>
+        <div class="detail-item">
+          <span class="key">Category</span>
+          <span class="val">${item.category}</span>
+        </div>
+        <div class="detail-item">
+          <span class="key">Chunk Index</span>
+          <span class="val">Position #${item.position}</span>
+        </div>
+        <div class="detail-item">
+          <span class="key">Vector ID</span>
+          <span class="val" style="font-family:'JetBrains Mono'; font-size:0.75rem;">${item.id}</span>
+        </div>
+        <div class="detail-item">
+          <span class="key">Text Content Preview</span>
+          <div class="text-box">${item.text}...</div>
+        </div>
+      `;
+    }
+
+    function resetVectorView() {
+      updateVectorPlot();
+    }
+
+    function filterVectorPoints(term) {
+      const termLower = term.toLowerCase();
+      // Plotly restyle opacity
+      const plotEl = document.getElementById('vector-plot');
+      if (!plotEl || !plotEl.data) return;
+
+      plotEl.data.forEach((trace, traceIdx) => {
+        const opacities = trace.customdata.map(p => {
+          const match = p.title.toLowerCase().includes(termLower) ||
+                        p.text.toLowerCase().includes(termLower) ||
+                        p.category.toLowerCase().includes(termLower);
+          return match ? 0.9 : 0.1;
+        });
+        Plotly.restyle('vector-plot', { 'marker.opacity': [opacities] }, [traceIdx]);
+      });
+    }
+
+    // --- KNOWLEDGE GRAPH (VIS-NETWORK) ---
+    function initGraph() {
+      const container = document.getElementById('graph-canvas');
+
+      const visNodes = DATA.graph_nodes.map(n => {
+        let color = '#00f2fe';
+        if (n.group === 'Document') color = '#f59e0b';
+        if (n.group === 'Entity') color = '#ec4899';
+
+        return {
+          id: n.id,
+          label: n.label,
+          group: n.group,
+          value: n.size,
+          shape: n.group === 'Document' ? 'hexagon' : (n.group === 'Entity' ? 'box' : 'dot'),
+          color: {
+            background: color,
+            border: '#ffffff',
+            highlight: { background: '#ffffff', border: color }
+          },
+          font: {
+            color: '#f8fafc',
+            face: 'Outfit',
+            size: n.group === 'Document' ? 14 : (n.group === 'Entity' ? 12 : 9)
+          },
+          raw: n
+        };
+      });
+
+      const edgeColors = {
+        'HAS_CHUNK': 'rgba(245, 158, 11, 0.4)',
+        'NEXT': 'rgba(0, 242, 254, 0.35)',
+        'MENTIONS': 'rgba(236, 72, 153, 0.5)',
+        'RELATED_TO': 'rgba(157, 78, 221, 0.6)'
+      };
+
+      const visEdges = DATA.graph_edges.map(e => ({
+        from: e.from,
+        to: e.to,
+        label: e.type,
+        color: {
+          color: edgeColors[e.type] || 'rgba(255,255,255,0.2)',
+          highlight: '#ffffff'
+        },
+        arrows: 'to',
+        font: { size: 8, color: '#94a3b8', strokeWidth: 0, align: 'middle' },
+        raw: e
+      }));
+
+      graphData = {
+        nodes: new vis.DataSet(visNodes),
+        edges: new vis.DataSet(visEdges)
+      };
+
+      const options = {
+        nodes: {
+          scaling: { min: 10, max: 30 }
+        },
+        edges: {
+          smooth: { type: 'continuous' },
+          width: 1
+        },
+        physics: {
+          barnesHut: {
+            gravitationalConstant: -2800,
+            centralGravity: 0.25,
+            springLength: 95,
+            springConstant: 0.04
+          },
+          stabilization: { iterations: 120 }
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 100
+        }
+      };
+
+      network = new vis.Network(container, graphData, options);
+
+      network.on('click', function(params) {
+        if (params.nodes.length > 0) {
+          const nid = params.nodes[0];
+          const node = graphData.nodes.get(nid);
+          showGraphNodeDetail(node.raw);
+        }
+      });
+    }
+
+    function showGraphNodeDetail(item) {
+      const drawer = document.getElementById('graph-drawer-content');
+      drawer.className = '';
+      drawer.innerHTML = `
+        <div class="detail-item">
+          <span class="key">Node Type</span>
+          <span class="val" style="font-weight:700; color:var(--accent-purple);">${item.group}</span>
+        </div>
+        <div class="detail-item">
+          <span class="key">Label / Name</span>
+          <span class="val" style="font-weight:600;">${item.label || item.name}</span>
+        </div>
+        ${item.category ? `
+        <div class="detail-item">
+          <span class="key">Category</span>
+          <span class="val">${item.category}</span>
+        </div>` : ''}
+        ${item.position !== undefined ? `
+        <div class="detail-item">
+          <span class="key">Chunk Index</span>
+          <span class="val">#${item.position}</span>
+        </div>` : ''}
+        ${item.preview ? `
+        <div class="detail-item">
+          <span class="key">Content Preview</span>
+          <div class="text-box">${item.preview}...</div>
+        </div>` : ''}
+      `;
+    }
+
+    function filterGraph(mode) {
+      document.getElementById('filter-all').classList.toggle('active', mode === 'all');
+      document.getElementById('filter-entities').classList.toggle('active', mode === 'entities');
+      document.getElementById('filter-docs').classList.toggle('active', mode === 'docs');
+
+      if (!network || !graphData) return;
+
+      if (mode === 'all') {
+        DATA.graph_nodes.forEach(n => {
+          graphData.nodes.update({ id: n.id, hidden: false });
+        });
+        DATA.graph_edges.forEach(e => {
+          graphData.edges.update({ from: e.from, to: e.to, hidden: false });
+        });
+      } else if (mode === 'entities') {
+        DATA.graph_nodes.forEach(n => {
+          const isEntityOrDoc = n.group === 'Entity' || n.group === 'Document';
+          graphData.nodes.update({ id: n.id, hidden: !isEntityOrDoc });
+        });
+      } else if (mode === 'docs') {
+        DATA.graph_nodes.forEach(n => {
+          const isDocOrChunk = n.group === 'Document' || n.group === 'Chunk';
+          graphData.nodes.update({ id: n.id, hidden: !isDocOrChunk });
+        });
+      }
+      network.fit();
+    }
+
+    let physicsEnabled = true;
+    function togglePhysics() {
+      physicsEnabled = !physicsEnabled;
+      network.setOptions({ physics: { enabled: physicsEnabled } });
+      document.getElementById('btn-physics').classList.toggle('active', physicsEnabled);
+      document.getElementById('btn-physics').innerText = physicsEnabled ? 'Stabilize' : 'Enable Physics';
+    }
+
+    function fitGraph() {
+      if (network) network.fit();
+    }
+
+    function searchGraph(val) {
+      if (!network || !graphData) return;
+      const lower = val.toLowerCase();
+      if (!val) {
+        DATA.graph_nodes.forEach(n => graphData.nodes.update({ id: n.id, opacity: 1 }));
+        return;
+      }
+      const foundIds = [];
+      DATA.graph_nodes.forEach(n => {
+        const match = (n.label && n.label.toLowerCase().includes(lower)) ||
+                      (n.name && n.name.toLowerCase().includes(lower));
+        graphData.nodes.update({ id: n.id, opacity: match ? 1 : 0.15 });
+        if (match) foundIds.push(n.id);
+      });
+      if (foundIds.length === 1) {
+        network.focus(foundIds[0], { scale: 1.2, animation: true });
+      }
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      initVectorPlot();
+    });
+  </script>
+</body>
+</html>
