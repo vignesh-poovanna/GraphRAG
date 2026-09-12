@@ -947,71 +947,173 @@
   </main>
 
   <script>
-    const input = document.getElementById('questionInput');
+    const API = 'http://localhost:8000';
+    let sessionId = null;
+    let recording = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+
+    const input      = document.getElementById('questionInput');
     const messagesEl = document.getElementById('messages');
-    const chatEmpty = document.getElementById('chatEmpty');
-    const citeCount = document.getElementById('citeCount');
-    const micBtn = document.getElementById('micBtn');
-    const modeText = document.getElementById('modeText');
-    const modeVoice = document.getElementById('modeVoice');
-    let cites = 0;
+    const chatEmpty  = document.getElementById('chatEmpty');
+    const citeCount  = document.getElementById('citeCount');
+    const micBtn     = document.getElementById('micBtn');
+    const modeText   = document.getElementById('modeText');
+    const modeVoice  = document.getElementById('modeVoice');
+    let totalCites   = 0;
 
-    const sampleAnswers = [
-      { text: "This formulation appears in a documented TKDL record, which weighs against novelty for a patent claim in most jurisdictions.", src: "TKDL/AY/1123 · Sec. 4" },
-      { text: "Under the Biological Diversity Act, prior approval from the National Biodiversity Authority is required before filing.", src: "BD Act 2002, S.6" },
-      { text: "The EU's GI framework requires proof of a link between the product and its geographical origin — this is jurisdiction-specific and unsettled for compound formulations.", src: "EU Reg. 1151/2012, Art.5" }
+    /* ── Sample questions (wand button) ────────────────────────── */
+    const SAMPLES = [
+      'Can I patent a triphala-based formulation in India?',
+      'What does Section 3(p) of the Patents Act say about traditional knowledge?',
+      'How does the Nagoya Protocol affect Ayurvedic product exports?',
+      'Was the neem patent revoked and on what grounds?',
+      'What approvals are needed under the Biological Diversity Act before filing a patent?',
+      'Compare India and EU rules for Geographical Indication registration of herbal products.',
     ];
-    let i = 0;
+    let wandIdx = 0;
+    document.querySelector('.wand-btn').addEventListener('click', () => {
+      input.value = SAMPLES[wandIdx++ % SAMPLES.length];
+      input.focus();
+    });
 
-    function sendMessage() {
-      const val = input.value.trim();
-      if (!val) return;
+    /* ── Helpers ────────────────────────────────────────────────── */
+    function showMessages() {
       chatEmpty.style.display = 'none';
       messagesEl.classList.add('show');
+    }
 
-      const userMsg = document.createElement('div');
-      userMsg.className = 'msg user';
-      userMsg.innerHTML = `<div class="msg-avatar">You</div><div class="msg-bubble">${val.replace(/</g, '&lt;')}</div>`;
-      messagesEl.appendChild(userMsg);
-
-      input.value = '';
+    function addMsg(role, html, citations) {
+      showMessages();
+      const isBot = role === 'bot';
+      const d = document.createElement('div');
+      d.className = `msg ${role}`;
+      const citHtml = (citations && citations.length)
+        ? citations.map(c => `<div class="citation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>${c}</div>`).join('')
+        : '';
+      d.innerHTML = `<div class="msg-avatar">${isBot ? 'AI' : 'You'}</div><div class="msg-bubble">${html}${citHtml}</div>`;
+      messagesEl.appendChild(d);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      return d;
+    }
 
-      setTimeout(() => {
-        const ans = sampleAnswers[i % sampleAnswers.length];
-        i++;
-        cites++;
-        citeCount.textContent = cites + (cites === 1 ? ' source cited' : ' sources cited');
-        const botMsg = document.createElement('div');
-        botMsg.className = 'msg bot';
-        botMsg.innerHTML = `<div class="msg-avatar">AI</div><div class="msg-bubble">${ans.text}<div class="citation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>${ans.src}</div></div>`;
-        messagesEl.appendChild(botMsg);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-      }, 500);
+    function addTyping() {
+      showMessages();
+      const d = document.createElement('div');
+      d.className = 'msg bot'; d.id = 'typing-msg';
+      d.innerHTML = `<div class="msg-avatar">AI</div><div class="msg-bubble" style="display:flex;gap:5px;align-items:center;padding:12px 14px"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 1.1s infinite"></span><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 1.1s .2s infinite"></span><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 1.1s .4s infinite"></span></div>`;
+      messagesEl.appendChild(d);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    function removeTyping() { document.getElementById('typing-msg')?.remove(); }
+
+    function formatAnswer(text) {
+      return text
+        .replace(/\[CLEAR\]/g,    '<span style="background:#d4f5e9;color:#0f6b48;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[CLEAR]</span>')
+        .replace(/\[AMBIGUOUS\]/g,'<span style="background:#fff3cd;color:#856404;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[AMBIGUOUS]</span>')
+        .replace(/\[INFERRED\]/g, '<span style="background:#e8d8ff;color:#5c25d4;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[INFERRED]</span>')
+        .replace(/\n/g, '<br>');
+    }
+
+    /* ── Send text query ────────────────────────────────────────── */
+    async function sendMessage() {
+      const val = input.value.trim();
+      if (!val) return;
+      addMsg('user', val.replace(/</g, '&lt;'));
+      input.value = '';
+      addTyping();
+
+      try {
+        const res = await fetch(`${API}/query`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query: val, session_id: sessionId}),
+        });
+        const data = await res.json();
+        sessionId = data.session_id;
+        removeTyping();
+        const cites = (data.sources || [])
+          .slice(0,3)
+          .map(s => s.citation || s.act_or_source_name || 'Source')
+          .filter(Boolean);
+        totalCites += cites.length;
+        citeCount.textContent = totalCites + (totalCites === 1 ? ' source cited' : ' sources cited');
+        addMsg('bot', formatAnswer(data.answer || 'No answer returned.'), cites);
+      } catch {
+        removeTyping();
+        addMsg('bot', '⚠ API server not reachable. Start it with:<br><code>uvicorn src.api:app --port 8000</code>');
+      }
     }
 
     document.getElementById('sendBtn').addEventListener('click', sendMessage);
     document.getElementById('askBtn').addEventListener('click', sendMessage);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
 
-    let recording = false;
-    micBtn.addEventListener('click', () => {
-      recording = !recording;
-      micBtn.classList.toggle('recording', recording);
-      if (recording) { input.placeholder = 'Listening…'; }
-      else { input.placeholder = 'e.g. Can I patent this triphala formulation?'; }
+    /* ── Mic / voice recording ──────────────────────────────────── */
+    micBtn.addEventListener('click', async () => {
+      if (!recording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.onstop = sendVoice;
+          mediaRecorder.start();
+          recording = true;
+          micBtn.classList.add('recording');
+          input.placeholder = 'Recording… click mic again to stop.';
+          modeVoice.classList.add('active'); modeText.classList.remove('active');
+        } catch { alert('Microphone permission denied.'); }
+      } else {
+        mediaRecorder.stop();
+        recording = false;
+        micBtn.classList.remove('recording');
+        input.placeholder = 'e.g. Can I patent this triphala formulation?';
+        modeText.classList.add('active'); modeVoice.classList.remove('active');
+      }
     });
-    document.getElementById('tryVoice').addEventListener('click', e => { e.preventDefault(); micBtn.click(); });
 
-    modeVoice.addEventListener('click', () => {
-      modeVoice.classList.add('active');
-      modeText.classList.remove('active');
-    });
-    modeText.addEventListener('click', () => {
-      modeText.classList.add('active');
-      modeVoice.classList.remove('active');
-    });
-  </script>
+    async function sendVoice() {
+      const blob = new Blob(audioChunks, {type: 'audio/webm'});
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const b64 = reader.result.split(',')[1];
+        addMsg('user', '🎙 <em>Voice message…</em>');
+        addTyping();
+        try {
+          const res = await fetch(`${API}/query/voice`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({audio_b64: b64, session_id: sessionId}),
+          });
+          const data = await res.json();
+          sessionId = data.session_id;
+          removeTyping();
+          const cites = (data.sources || []).slice(0,3).map(s => s.citation || s.act_or_source_name).filter(Boolean);
+          totalCites += cites.length;
+          citeCount.textContent = totalCites + ' sources cited';
+          addMsg('bot', formatAnswer(data.answer || ''), cites);
+        } catch {
+          removeTyping();
+          addMsg('bot', '⚠ Voice query failed. Check API server.');
+        }
+      };
+      reader.readAsDataURL(blob);
+    }
+
+    /* ── Mode toggle ────────────────────────────────────────────── */
+    modeVoice.addEventListener('click', () => { modeVoice.classList.add('active'); modeText.classList.remove('active'); });
+    modeText.addEventListener('click',  () => { modeText.classList.add('active'); modeVoice.classList.remove('active'); });
+
+    /* ── Try Voice link ─────────────────────────────────────────── */
+    document.getElementById('tryVoice')?.addEventListener('click', e => { e.preventDefault(); micBtn.click(); });
+
+    /* ── Live doc count ─────────────────────────────────────────── */
+    fetch(`${API}/stats`).then(r => r.json()).then(d => {
+      const el = document.getElementById('docCount');
+      if (el && d.total_documents) el.textContent = d.total_documents;
+    }).catch(() => {});
+</script>
 
 </body>
 
