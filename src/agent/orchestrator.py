@@ -305,22 +305,24 @@ Reply with ONLY the category name, nothing else."""
                 "tags":     [],
             }
 
-        # Override qdrant manager's results by directly building the context
-        context_chunks = [c.get("text", "") for c in chunks if c.get("text")]
-        context = "\n---\n".join(context_chunks[:8])  # cap at 8 chunks for context window
+        # Number chunks so the LLM can cite them inline
+        used_chunks = [c for c in chunks if c.get("text")][:8]
+        numbered_context = "\n---\n".join(
+            f"[{i+1}] {c['text']}" for i, c in enumerate(used_chunks)
+        )
 
         system_msg = (
-            "You are an expert regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
-            "You MUST synthesize a grounded answer from the CONTEXT block below. "
-            "The CONTEXT contains statutory provisions, treaty text, guidelines, and regulatory documents. "
-            "Even when the context does not name the exact product/treaty mentioned in the question, "
-            "derive the applicable legal rules and requirements from related statutory provisions in the context. "
-            "For each factual claim, prefix it with one of these confidence tags:\n"
-            "  [CLEAR] — directly stated in a retrieved source.\n"
-            "  [AMBIGUOUS] — present in sources but conflicting or genuinely unsettled.\n"
-            "  [INFERRED] — you are inferring regulatory implications from related statutory text.\n"
-            "ELIGIBLE_FOR claims MUST always be tagged [INFERRED]. "
-            f"Only if the CONTEXT is completely empty or contains ZERO relevant statutory or regulatory content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
+            "You are a concise regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
+            "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
+            "Rules:\n"
+            "- Write 3 to 6 short bullet points. Each bullet must be 1-2 sentences max.\n"
+            "- Summarize the source in your own words — do NOT copy-paste entire sentences from the source.\n"
+            "- After each bullet, cite the source number(s) in square brackets, e.g. [1] or [1][3].\n"
+            "- Tag each bullet with ONE confidence marker: [CLEAR] if directly stated, [INFERRED] if derived, [AMBIGUOUS] if conflicting.\n"
+            "- End your answer with a blank line then: **Sources:** followed by the cited numbers and their short titles.\n"
+            "- After Sources, add a blank line then: **Verdict:** followed by a direct answer (e.g. Yes / No / Conditional) and one sentence explaining the key condition or reason.\n"
+            "- Do NOT add analysis beyond what is grounded in the context.\n"
+            f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
         )
 
         # Include session context for continuity (Phase 8)
@@ -329,7 +331,7 @@ Reply with ONLY the category name, nothing else."""
             messages.extend(session_context[-4:])  # last 2 turns max
         messages += [
             {"role": "system", "content": system_msg},
-            {"role": "user",   "content": f"CONTEXT:\n{context}\n\nQUESTION: {query}"},
+            {"role": "user",   "content": f"CONTEXT:\n{numbered_context}\n\nQUESTION: {query}"},
         ]
 
         answer = self.qe._FALLBACK
@@ -341,7 +343,7 @@ Reply with ONLY the category name, nothing else."""
                     model=self._synthesis_model,
                     messages=messages,
                     temperature=0.0,
-                    max_tokens=1024,
+                    max_tokens=600,
                 )
                 answer = resp.choices[0].message.content.strip()
             else:

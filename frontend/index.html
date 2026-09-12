@@ -760,7 +760,7 @@
         Dashboard
       </a>
       <a href="#" class="btn-ghost">Sources</a>
-      <a href="#" class="btn-primary-nav">Try IP-SAKTI</a>
+      <a href="#" class="btn-primary-nav">by Aether Mind</a>
       <div class="theme-dot">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="12" cy="12" r="9" />
@@ -953,14 +953,14 @@
     let mediaRecorder = null;
     let audioChunks = [];
 
-    const input      = document.getElementById('questionInput');
+    const input = document.getElementById('questionInput');
     const messagesEl = document.getElementById('messages');
-    const chatEmpty  = document.getElementById('chatEmpty');
-    const citeCount  = document.getElementById('citeCount');
-    const micBtn     = document.getElementById('micBtn');
-    const modeText   = document.getElementById('modeText');
-    const modeVoice  = document.getElementById('modeVoice');
-    let totalCites   = 0;
+    const chatEmpty = document.getElementById('chatEmpty');
+    const citeCount = document.getElementById('citeCount');
+    const micBtn = document.getElementById('micBtn');
+    const modeText = document.getElementById('modeText');
+    const modeVoice = document.getElementById('modeVoice');
+    let totalCites = 0;
 
     /* ── Sample questions (wand button) ────────────────────────── */
     const SAMPLES = [
@@ -1009,8 +1009,8 @@
 
     function formatAnswer(text) {
       return text
-        .replace(/\[CLEAR\]/g,    '<span style="background:#d4f5e9;color:#0f6b48;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[CLEAR]</span>')
-        .replace(/\[AMBIGUOUS\]/g,'<span style="background:#fff3cd;color:#856404;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[AMBIGUOUS]</span>')
+        .replace(/\[CLEAR\]/g, '<span style="background:#d4f5e9;color:#0f6b48;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[CLEAR]</span>')
+        .replace(/\[AMBIGUOUS\]/g, '<span style="background:#fff3cd;color:#856404;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[AMBIGUOUS]</span>')
         .replace(/\[INFERRED\]/g, '<span style="background:#e8d8ff;color:#5c25d4;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">[INFERRED]</span>')
         .replace(/\n/g, '<br>');
     }
@@ -1026,14 +1026,14 @@
       try {
         const res = await fetch(`${API}/query`, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({query: val, session_id: sessionId}),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: val, session_id: sessionId }),
         });
         const data = await res.json();
         sessionId = data.session_id;
         removeTyping();
         const cites = (data.sources || [])
-          .slice(0,3)
+          .slice(0, 3)
           .map(s => s.citation || s.act_or_source_name || 'Source')
           .filter(Boolean);
         totalCites += cites.length;
@@ -1053,7 +1053,7 @@
     micBtn.addEventListener('click', async () => {
       if (!recording) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaRecorder = new MediaRecorder(stream);
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -1074,7 +1074,7 @@
     });
 
     async function sendVoice() {
-      const blob = new Blob(audioChunks, {type: 'audio/webm'});
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
       const reader = new FileReader();
       reader.onload = async () => {
         const b64 = reader.result.split(',')[1];
@@ -1083,13 +1083,13 @@
         try {
           const res = await fetch(`${API}/query/voice`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({audio_b64: b64, session_id: sessionId}),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio_b64: b64, session_id: sessionId }),
           });
           const data = await res.json();
           sessionId = data.session_id;
           removeTyping();
-          const cites = (data.sources || []).slice(0,3).map(s => s.citation || s.act_or_source_name).filter(Boolean);
+          const cites = (data.sources || []).slice(0, 3).map(s => s.citation || s.act_or_source_name).filter(Boolean);
           totalCites += cites.length;
           citeCount.textContent = totalCites + ' sources cited';
           addMsg('bot', formatAnswer(data.answer || ''), cites);
@@ -1103,7 +1103,7 @@
 
     /* ── Mode toggle ────────────────────────────────────────────── */
     modeVoice.addEventListener('click', () => { modeVoice.classList.add('active'); modeText.classList.remove('active'); });
-    modeText.addEventListener('click',  () => { modeText.classList.add('active'); modeVoice.classList.remove('active'); });
+    modeText.addEventListener('click', () => { modeText.classList.add('active'); modeVoice.classList.remove('active'); });
 
     /* ── Try Voice link ─────────────────────────────────────────── */
     document.getElementById('tryVoice')?.addEventListener('click', e => { e.preventDefault(); micBtn.click(); });
@@ -1112,8 +1112,8 @@
     fetch(`${API}/stats`).then(r => r.json()).then(d => {
       const el = document.getElementById('docCount');
       if (el && d.total_documents) el.textContent = d.total_documents;
-    }).catch(() => {});
-</script>
+    }).catch(() => { });
+  </script>
 
 </body>
 

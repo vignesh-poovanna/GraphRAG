@@ -390,16 +390,13 @@ class QueryEngine:
         if not results:
             return {"answer": self._FALLBACK, "sources": [], "context": "", "language": language, "tags": []}
 
-        # Build context and structured citations simultaneously
-        context_chunks = []
-        sources = []
-        for r in results:
-            text = r.get("text", "")
-            if text:
-                context_chunks.append(text)
-            sources.append(format_source_object(r))
-
-        context = "\n---\n".join(context_chunks)
+        # Number chunks so LLM can cite inline; also build source objects for frontend
+        context_chunks = [r.get("text", "") for r in results if r.get("text")]
+        numbered_context = "\n---\n".join(
+            f"[{i+1}] {t}" for i, t in enumerate(context_chunks)
+        )
+        context = numbered_context  # kept for the return value
+        sources = [format_source_object(r) for r in results]
 
         # Phase 7: resolve synthesis model
         if model is None:
@@ -414,19 +411,18 @@ class QueryEngine:
             )
 
         system_msg = (
-            "You are an expert regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
-            "You MUST synthesize a grounded answer from the CONTEXT block below. "
-            "The CONTEXT contains statutory provisions, treaty text, guidelines, and regulatory documents. "
-            "Even when the context does not name the exact product/treaty in the question, "
-            "derive the applicable legal rules and requirements from related statutory provisions in the context. "
-            "For each factual claim, prefix it with one of these confidence tags:\n"
-            "  [CLEAR] — directly stated in a retrieved source.\n"
-            "  [AMBIGUOUS] — present in sources but conflicting or genuinely unsettled.\n"
-            "  [INFERRED] — you are inferring regulatory implications from related statutory text.\n"
-            "ELIGIBLE_FOR claims MUST always be tagged [INFERRED]. "
-            f"Only if the CONTEXT is completely empty or contains ZERO relevant statutory or regulatory content, respond with EXACTLY: \"{self._FALLBACK}\""
+            "You are a concise regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
+            "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
+            "Rules:\n"
+            "- Write 3 to 6 short bullet points. Each bullet must be 1-2 sentences max.\n"
+            "- Summarize the source in your own words — do NOT copy-paste entire sentences from the source.\n"
+            "- After each bullet, cite the source number(s) in square brackets, e.g. [1] or [1][3].\n"
+            "- Tag each bullet with ONE confidence marker: [CLEAR] if directly stated, [INFERRED] if derived, [AMBIGUOUS] if conflicting.\n"
+            "- End your answer with a blank line then: **Sources:** followed by the cited numbers and their short titles.\n"
+            "- After Sources, add a blank line then: **Verdict:** followed by a direct answer (e.g. Yes / No / Conditional) and one sentence explaining the key condition or reason.\n"
+            f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self._FALLBACK}\""
         )
-        user_msg = f"CONTEXT:\n{context}\n\nQUESTION: {query}"
+        user_msg = f"CONTEXT:\n{numbered_context}\n\nQUESTION: {query}"
 
         try:
             api_key = self.neo4j.config.get("llm.synthesis_api_key", "") if hasattr(self.neo4j, "config") else ""
@@ -443,7 +439,7 @@ class QueryEngine:
                         {"role": "user",   "content": user_msg},
                     ],
                     temperature=temperature,
-                    max_tokens=768,
+                    max_tokens=600,
                 )
                 answer = resp.choices[0].message.content.strip()
             else:
