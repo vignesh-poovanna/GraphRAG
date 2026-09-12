@@ -21,12 +21,14 @@ class EmbeddingProcessor:
     def __init__(self, config):
         """Initialize with configuration"""
         self.config = config
-        self.model_name = config.get('embedding.model_name', 'sentence-transformers/all-MiniLM-L6-v2')
-        self.vector_size = config.get('embedding.vector_size', 384)  # Default for all-MiniLM-L6-v2
+        self.model_name = config.get('embedding.model_name', 'intfloat/multilingual-e5-large')
+        self.vector_size = config.get('embedding.dimension', 1024)
         self.device = config.get('embedding.device', 'cpu')
         self.max_length = config.get('embedding.max_length', 512)
         self.tokenizer = None
         self.model = None
+        # multilingual-e5 requires prefixes; other models do not
+        self._use_e5_prefix = 'e5' in self.model_name.lower()
         
         # Validate transformers availability
         if not TRANSFORMERS_AVAILABLE:
@@ -63,10 +65,18 @@ class EmbeddingProcessor:
             logger.error(f"Error loading embedding model: {str(e)}")
             raise
     
-    def get_embedding(self, text: str) -> List[float]:
-        """Generate embedding for a text string"""
+    def get_embedding(self, text: str, mode: str = "query") -> List[float]:
+        """
+        Generate embedding for a text string.
+        mode: 'query' (for search queries) or 'passage' (for indexed chunks).
+        For multilingual-e5 models a prefix is required per the model card.
+        """
         if not self.model or not self.tokenizer:
             self.load_model()
+
+        if self._use_e5_prefix:
+            prefix = "query: " if mode == "query" else "passage: "
+            text = prefix + text
             
         try:
             # Handle empty or None input
@@ -121,10 +131,18 @@ class EmbeddingProcessor:
             # Return zero vector on error
             return [0.0] * self.vector_size
     
-    def get_batch_embeddings(self, texts: List[str], batch_size: int = 8) -> List[List[float]]:
-        """Generate embeddings for a batch of texts"""
+    def get_batch_embeddings(self, texts: List[str], batch_size: int = 8,
+                              mode: str = "passage") -> List[List[float]]:
+        """
+        Generate embeddings for a batch of texts.
+        mode: 'query' or 'passage' (used for multilingual-e5 prefix).
+        """
         if not self.model or not self.tokenizer:
             self.load_model()
+
+        if self._use_e5_prefix:
+            prefix = "query: " if mode == "query" else "passage: "
+            texts = [prefix + t for t in texts]
             
         results = []
         for i in range(0, len(texts), batch_size):
@@ -193,25 +211,31 @@ class EmbeddingProcessor:
             raise ValueError(f"Vector dimensions do not match: {len(vec1)} vs {len(vec2)}")
             
         try:
-            # Convert to numpy arrays for efficient calculation
             vec1_array = np.array(vec1)
             vec2_array = np.array(vec2)
-            
-            # Compute dot product
             dot_product = np.dot(vec1_array, vec2_array)
-            
-            # Compute magnitudes
             magnitude1 = np.linalg.norm(vec1_array)
             magnitude2 = np.linalg.norm(vec2_array)
-            
-            # Avoid division by zero
             if magnitude1 == 0 or magnitude2 == 0:
                 return 0.0
-                
-            # Calculate cosine similarity
-            similarity = dot_product / (magnitude1 * magnitude2)
-            
-            return float(similarity)
+            return float(dot_product / (magnitude1 * magnitude2))
         except Exception as e:
             logger.error(f"Error calculating vector similarity: {str(e)}")
             return 0.0
+
+    def detect_language(self, text: str) -> str:
+        """
+        Detect the language of a text string.
+        Returns BCP-47 language code (e.g. 'en', 'hi', 'ta').
+        Falls back to 'en' if langdetect is not installed or detection fails.
+        Uses only the first 500 chars for speed.
+        """
+        try:
+            from langdetect import detect  # type: ignore
+            return detect(text[:500])
+        except ImportError:
+            logger.debug("langdetect not installed; defaulting to 'en'")
+            return "en"
+        except Exception as e:
+            logger.debug("Language detection failed (%s); defaulting to 'en'", e)
+            return "en"

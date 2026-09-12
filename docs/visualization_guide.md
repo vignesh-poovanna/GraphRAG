@@ -146,3 +146,60 @@ Qdrant provides an administrative web interface at http://localhost:6333/dashboa
                         |   (Zero Hallucination)   |
                         +--------------------------+
 ```
+
+---
+
+## IP-SAKTI Domain Schema (Phase 2)
+
+### Node Labels
+
+| Label | Unique Constraint | Example |
+| :--- | :--- | :--- |
+| `Formulation` | `name` | Chyawanprash, Triphala |
+| `Ingredient` | `name` | Ashwagandha, Turmeric |
+| `LegalInstrument` | `name` | Patents Act 1970 Section 3(p) |
+| `Jurisdiction` | `name` | India, US, EU, WIPO |
+| `IPProtectionType` | `name` | Patent, GI, TraditionalKnowledgeRecord |
+| `CasePrecedent` | `name` | Turmeric Wound-Healing Patent Revocation |
+| `RegulatoryBody` | `name` | Indian Patent Office, CSIR-TKDL |
+| `InferredRelation` | `source_name + target_name + rel_type` | (always tagged `[INFERRED]`) |
+
+### Relationship Types
+
+```
+(Formulation)-[:CONTAINS_INGREDIENT]->(Ingredient)
+(Formulation)-[:DOCUMENTED_IN]->(LegalInstrument | CasePrecedent)
+(LegalInstrument)-[:APPLIES_IN]->(Jurisdiction)
+(CasePrecedent)-[:CITES]->(LegalInstrument)
+(IPProtectionType | RegulatoryBody)-[:GOVERNED_BY]->(LegalInstrument)
+(Formulation)-[:HAS_INFERRED_RELATION]->(InferredRelation)-[:INFERRED_TARGET]->(IPProtectionType)
+```
+
+### Useful Cypher Queries
+
+**Find all CasePrecedents citing a given Act:**
+```cypher
+MATCH (cp:CasePrecedent)-[:CITES]->(li:LegalInstrument)
+WHERE li.name CONTAINS 'Patents Act'
+RETURN cp.name, li.name;
+```
+
+**List all LegalInstruments for a jurisdiction:**
+```cypher
+MATCH (li:LegalInstrument)-[:APPLIES_IN]->(j:Jurisdiction)
+WHERE j.name = 'India'
+RETURN li.name ORDER BY li.name;
+```
+
+**Find inferred IP eligibility claims (NOT legal facts):**
+```cypher
+MATCH (f:Formulation)-[:HAS_INFERRED_RELATION]->(ir:InferredRelation)-[:INFERRED_TARGET]->(ip:IPProtectionType)
+RETURN f.name, ir.tag, ip.name;
+```
+
+**Ingredient-level prior-art check:**
+```cypher
+MATCH (f:Formulation)-[:CONTAINS_INGREDIENT]->(i:Ingredient)
+WHERE i.name CONTAINS 'Turmeric'
+RETURN f.name AS formulation, i.name AS ingredient;
+```

@@ -53,23 +53,50 @@ class Neo4jManager:
             logger.info("Neo4j connection closed")
             
     def setup_schema(self):
-        """Set up the document graph schema with constraints"""
+        """Set up the document graph schema with constraints for both generic and IP-SAKTI domain nodes."""
         logger.info("Setting up Neo4j schema with constraints")
-        
-        # Queries to create constraints
+
         constraints = [
-            # Document uniqueness constraint
+            # Core document graph
             """
             CREATE CONSTRAINT document_id IF NOT EXISTS
             FOR (d:Document) REQUIRE d.id IS UNIQUE
             """,
-            # Chunk uniqueness constraint
             """
             CREATE CONSTRAINT chunk_id IF NOT EXISTS
             FOR (c:Chunk) REQUIRE c.id IS UNIQUE
+            """,
+            # IP-SAKTI domain node labels (Phase 2)
             """
+            CREATE CONSTRAINT formulation_name IF NOT EXISTS
+            FOR (n:Formulation) REQUIRE n.name IS UNIQUE
+            """,
+            """
+            CREATE CONSTRAINT ingredient_name IF NOT EXISTS
+            FOR (n:Ingredient) REQUIRE n.name IS UNIQUE
+            """,
+            """
+            CREATE CONSTRAINT legal_instrument_name IF NOT EXISTS
+            FOR (n:LegalInstrument) REQUIRE n.name IS UNIQUE
+            """,
+            """
+            CREATE CONSTRAINT jurisdiction_name IF NOT EXISTS
+            FOR (n:Jurisdiction) REQUIRE n.name IS UNIQUE
+            """,
+            """
+            CREATE CONSTRAINT ip_protection_type_name IF NOT EXISTS
+            FOR (n:IPProtectionType) REQUIRE n.name IS UNIQUE
+            """,
+            """
+            CREATE CONSTRAINT case_precedent_name IF NOT EXISTS
+            FOR (n:CasePrecedent) REQUIRE n.name IS UNIQUE
+            """,
+            """
+            CREATE CONSTRAINT regulatory_body_name IF NOT EXISTS
+            FOR (n:RegulatoryBody) REQUIRE n.name IS UNIQUE
+            """,
         ]
-        
+
         try:
             with self.driver.session(database=self.database) as session:
                 for constraint in constraints:
@@ -406,4 +433,129 @@ class Neo4jManager:
                 return [dict(r) for r in result]
         except Exception as e:
             logger.error(f"Error getting documents for entities: {str(e)}")
+            return []
+
+    # ------------------------------------------------------------------
+    # IP-SAKTI Domain Entity Operations (Phase 2)
+    # ------------------------------------------------------------------
+
+    # Domain label set — used to route MERGE to the correct label
+    _DOMAIN_LABELS = {
+        "Formulation", "Ingredient", "LegalInstrument", "Jurisdiction",
+        "IPProtectionType", "CasePrecedent", "RegulatoryBody",
+    }
+
+    def upsert_domain_entity(self, name: str, entity_type: str, extra: dict = None):
+        """
+        MERGE a domain entity node. Falls back to generic Entity label for
+        unknown types so existing generic content is never disrupted.
+        """
+        label = entity_type if entity_type in self._DOMAIN_LABELS else "Entity"
+        props = {"name": name, "entity_type": entity_type}
+        if extra:
+            props.update(extra)
+        try:
+            with self.driver.session(database=self.database) as session:
+                session.run(
+                    f"""
+                    MERGE (n:{label} {{name: $name}})
+                    SET n += $props
+                    """,
+                    name=name, props=props,
+                )
+        except Exception as e:
+            logger.error("upsert_domain_entity failed (%s/%s): %s", label, name, e)
+
+    def link_domain_relation(self, source_name: str, target_name: str,
+                             rel_type: str, chunk_id: str = None):
+        """
+        MERGE a relationship between two domain entity nodes.
+        rel_type must be in the VALID_REL_TYPES allowlist (enforced by caller).
+        ELIGIBLE_FOR must NOT be passed here — use upsert_inferred_relation().
+        """
+        if rel_type == "ELIGIBLE_FOR":
+            logger.warning("ELIGIBLE_FOR must use upsert_inferred_relation(); ignored here.")
+            return
+        props = {"chunk_id": chunk_id} if chunk_id else {}
+        try:
+            with self.driver.session(database=self.database) as session:
+                session.run(
+                    f"""
+                    MATCH (s {{name: $src}})
+                    MATCH (t {{name: $tgt}})
+                    MERGE (s)-[r:{rel_type}]->(t)
+                    SET r += $props
+                    """,
+                    src=source_name, tgt=target_name, props=props,
+                )
+        except Exception as e:
+            logger.error("link_domain_relation failed (%s -[%s]-> %s): %s",
+                         source_name, rel_type, target_name, e)
+
+    def upsert_inferred_relation(self, source_name: str, target_name: str,
+                                  confidence: str = "inferred", chunk_id: str = None):
+        """
+        Store ELIGIBLE_FOR as an InferredRelation node (not a direct edge)
+        so it is always visually and logically distinct from stated legal facts.
+        """
+        try:
+            with self.driver.session(database=self.database) as session:
+                session.run(
+                    """
+                    MATCH (s {name: $src})
+                    MATCH (t {name: $tgt})
+                    MERGE (ir:InferredRelation {
+                        source_name: $src, target_name: $tgt, rel_type: 'ELIGIBLE_FOR'
+                    })
+                    SET ir.confidence = $conf,
+                        ir.chunk_id   = $cid,
+                        ir.tag        = '[INFERRED]'
+                    MERGE (s)-[:HAS_INFERRED_RELATION]->(ir)
+                    MERGE (ir)-[:INFERRED_TARGET]->(t)
+                    """,
+                    src=source_name, tgt=target_name,
+                    conf=confidence, cid=chunk_id or "",
+                )
+        except Exception as e:
+            logger.error("upsert_inferred_relation failed (%s -> %s): %s",
+                         source_name, target_name, e)
+
+    # ------------------------------------------------------------------
+    # Graph traversal for orchestrator (Phase 5)
+    # ------------------------------------------------------------------
+
+    def get_case_precedents_for_instrument(self, instrument_name: str, limit: int = 10):
+        """Return CasePrecedent nodes that CITE a given LegalInstrument (precedent lookup)."""
+        try:
+            with self.driver.session(database=self.database) as session:
+                result = session.run(
+                    """
+                    MATCH (cp:CasePrecedent)-[:CITES]->(li:LegalInstrument)
+                    WHERE li.name CONTAINS $name
+                    RETURN cp.name AS name, cp.entity_type AS entity_type
+                    LIMIT $limit
+                    """,
+                    name=instrument_name, limit=limit,
+                )
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.error("get_case_precedents_for_instrument failed: %s", e)
+            return []
+
+    def get_instruments_for_jurisdiction(self, jurisdiction_name: str, limit: int = 20):
+        """Return LegalInstrument nodes that APPLY_IN a given Jurisdiction (comparison mode)."""
+        try:
+            with self.driver.session(database=self.database) as session:
+                result = session.run(
+                    """
+                    MATCH (li:LegalInstrument)-[:APPLIES_IN]->(j:Jurisdiction)
+                    WHERE j.name CONTAINS $name
+                    RETURN li.name AS name, li.entity_type AS entity_type
+                    LIMIT $limit
+                    """,
+                    name=jurisdiction_name, limit=limit,
+                )
+                return [dict(r) for r in result]
+        except Exception as e:
+            logger.error("get_instruments_for_jurisdiction failed: %s", e)
             return []

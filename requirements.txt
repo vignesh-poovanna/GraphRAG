@@ -1,28 +1,34 @@
-# Core dependencies
-python-dotenv>=1.0.0
-pyyaml>=6.0
-loguru>=0.7.0
+﻿# Core dependencies
+neo4j
+qdrant-client
+sentence-transformers
 
-# Neo4j dependencies
-neo4j>=5.11.0
+# Multilingual embedding (Phase 3)
+transformers
+torch
 
-# Qdrant dependencies
-qdrant-client>=1.5.0
+# Chunking / format conversion
+python-docx
+markitdown
+pdfminer.six
 
-# NLP and embedding dependencies
-transformers>=4.35.0
-torch>=2.0.0
-sentence-transformers>=2.2.2
-numpy>=1.24.0
+# LLM backends (Phase 7)
+openai
+ollama
+
+# API backend (Phase 9)
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Speech pipeline (Phase 8)
+faster-whisper
+kokoro-onnx
+sounddevice
+soundfile
+langdetect
 
 # Utilities
-tqdm>=4.65.0
-requests>=2.31.0
-python-dateutil>=2.8.2
-uuid>=1.30
-
-# Optional ingestion deps (install only what you need)
-# pip install docling          # PDF -> Markdown (IBM Docling, fully local)
-# pip install markitdown       # DOCX -> Markdown (Microsoft MarkItDown)
-# pip install trafilatura      # HTML boilerplate stripping -> Markdown
-# pip install ollama           # Ollama Python client (Parts B/C) — required for extract_concepts.py
+pyyaml
+python-dotenv
+numpy

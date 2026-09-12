@@ -5,6 +5,8 @@ Design: convert everything to Markdown *before* document_processor.py.
 That way the existing frontmatter parsing and chunking stay untouched;
 we only widen what can feed into them.
 
+Supports IP-SAKTI corpus metadata: jurisdiction, act_or_source_name, year, language, document_type, stage.
+
 Optional deps (import lazily so missing libs only fail for that file type):
   docling   — PDF
   markitdown — DOCX
@@ -139,25 +141,49 @@ class FormatConverter:
     _FM_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
 
     def _ensure_frontmatter(self, md, filepath):
-        """If md already has frontmatter, leave it alone. Otherwise inject minimal block."""
+        """If md already has frontmatter, leave it alone. Otherwise inject IP-SAKTI corpus metadata."""
         if self._FM_RE.match(md):
             return md
-        title = self._extract_title(md) or Path(filepath).stem.replace("_", " ").replace("-", " ").title()
-        
-        # Infer meaningful category from stem/path
-        stem = Path(filepath).stem.lower()
-        if any(k in stem for k in ("launch", "deploy")):
-            category = "operations/launch"
-        elif any(k in stem for k in ("telemetry", "anomaly")):
-            category = "operations/telemetry"
-        elif any(k in stem for k in ("ground", "station")):
-            category = "operations/ground_station"
-        elif any(k in stem for k in ("obc", "computer")):
-            category = "subsystems/obc"
-        else:
-            category = "general"
 
-        fm = f"---\ntitle: \"{title}\"\ncategory: {category}\n---\n\n"
+        filepath = Path(filepath)
+        title = self._extract_title(md) or filepath.stem.replace("_", " ").replace("-", " ").title()
+        path_str = str(filepath).lower()
+
+        # Map corpus folder → (category, document_type, jurisdiction)
+        _MAP = {
+            "national_law":            ("ip/national_law",            "statute",       "India"),
+            "international_law":       ("ip/international_law",       "statute",       "International"),
+            "case_law":                ("ip/case_law",                "case",          "Various"),
+            "pharmacopoeia":           ("ip/pharmacopoeia",           "pharmacopoeia", "India"),
+            "tkdl_methodology":        ("ip/tkdl_methodology",        "guideline",     "India"),
+            "manufacturing_licensing": ("ip/manufacturing_licensing", "guideline",     "India"),
+            "export_compliance":       ("ip/export_compliance",       "guideline",     "Various"),
+        }
+        category, document_type, jurisdiction = "general", "general", "Unknown"
+        for folder, (cat, dtype, jur) in _MAP.items():
+            if folder in path_str:
+                category, document_type, jurisdiction = cat, dtype, jur
+                break
+
+        # Year from filename stem (e.g. "biodiversity_act_2002")
+        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', filepath.stem)
+        year = year_match.group(1) if year_match else ""
+
+        # stage is meaningful only for manufacturing_licensing; empty string elsewhere
+        stage = "application" if "manufacturing_licensing" in path_str else ""
+
+        fm = (
+            f'---\n'
+            f'title: "{title}"\n'
+            f'category: {category}\n'
+            f'document_type: {document_type}\n'
+            f'jurisdiction: "{jurisdiction}"\n'
+            f'act_or_source_name: "{title}"\n'
+            f'year: "{year}"\n'
+            f'language: "en"\n'
+            f'stage: "{stage}"\n'
+            f'---\n\n'
+        )
         return fm + md
 
     @staticmethod

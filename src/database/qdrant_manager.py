@@ -127,7 +127,7 @@ class QdrantManager:
             for i, chunk in enumerate(chunks):
                 # Generate embedding for the chunk text
                 try:
-                    embedding = self.embedding_model.get_embedding(chunk['text'])
+                    embedding = self.embedding_model.get_embedding(chunk['text'], mode='passage')
                 except Exception as e:
                     logger.error(f"Error generating embedding for chunk {i}: {str(e)}")
                     continue
@@ -194,7 +194,7 @@ class QdrantManager:
         
         try:
             logger.info(f"Searching for: '{query_text}' with limit {limit}")
-            query_vector = self.embedding_model.get_embedding(query_text)
+            query_vector = self.embedding_model.get_embedding(query_text, mode='query')
             
             # Prepare filter if needed
             search_filter = None

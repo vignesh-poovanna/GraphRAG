@@ -310,52 +310,114 @@ class QueryEngine:
         self,
         query: str,
         limit: int = 3,
-        model: str = "llama3.2:3b",
+        model: str = None,
         temperature: float = 0.0,
-        host: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        host: str = None,
+        language: str = "en",
+    ) -> dict:
         """
-        Perform hybrid retrieval and generate a strictly grounded answer via local Ollama.
+        Perform hybrid retrieval and generate a strictly grounded answer.
 
-        Uses ollama.chat() with a hard system-role constraint so that small models
-        (e.g. llama3.2:3b) cannot fall back on their parametric knowledge.
-        If context is empty or the model still wanders outside it, the caller
-        receives the fallback notice verbatim.
+        Phase 4: every source chunk is rendered through citation_formatter.
+        Phase 6: LLM is instructed to tag claims as [CLEAR], [AMBIGUOUS], or [INFERRED].
+        Phase 7: uses SYNTHESIS_LLM from config; falls back to local Ollama.
+
+        Returns:
+            {
+              "answer":   str,
+              "sources":  list of format_source_object() dicts,
+              "context":  str,
+              "language": str,
+              "tags":     list of tag strings found in the answer
+            }
         """
+        from src.utils.citation_formatter import format_source_object
+
         results = self.hybrid_search(query, limit=limit)
         if not results:
-            return {"answer": self._FALLBACK, "sources": [], "context": ""}
+            return {"answer": self._FALLBACK, "sources": [], "context": "", "language": language, "tags": []}
 
-        context_chunks = [r.get("text", "") for r in results if r.get("text")]
+        # Build context and structured citations simultaneously
+        context_chunks = []
+        sources = []
+        for r in results:
+            text = r.get("text", "")
+            if text:
+                context_chunks.append(text)
+            sources.append(format_source_object(r))
+
         context = "\n---\n".join(context_chunks)
 
-        # System message: hard constraint before the model sees anything else.
-        # chat() with a system role is the most reliable way to lock small LLMs
-        # to context — generate() with inline instructions is trivially ignored.
+        # Phase 7: resolve synthesis model
+        if model is None:
+            model = (
+                self.neo4j.config.get("llm.synthesis_model", "llama3.2:3b")
+                if hasattr(self.neo4j, "config") else "llama3.2:3b"
+            )
+        if host is None:
+            host = (
+                self.neo4j.config.get("llm.ollama_host", "http://localhost:11434")
+                if hasattr(self.neo4j, "config") else "http://localhost:11434"
+            )
+
         system_msg = (
-            "You are a read-only retrieval assistant. "
+            "You are a read-only retrieval assistant for Ayurveda IP and regulatory law. "
             "Your ONLY job is to extract and quote relevant information from the CONTEXT block below. "
             "You MUST NOT use any knowledge from your training data. "
-            "You MUST NOT infer, speculate, extrapolate, or reason beyond what is explicitly stated in the CONTEXT. "
-            f"If the CONTEXT does not directly answer the question, respond with EXACTLY this sentence and nothing else: "
-            f'"{self._FALLBACK}"'
+            "You MUST NOT infer, speculate, or reason beyond what is explicitly stated in the CONTEXT. "
+            # Phase 6: confidence tagging instruction
+            "For each factual claim you state, prefix it with one of these tags:\n"
+            "  [CLEAR] — directly stated in a retrieved source.\n"
+            "  [AMBIGUOUS] — present in sources but conflicting across jurisdictions or genuinely unsettled.\n"
+            "  [INFERRED] — you are inferring eligibility or applicability not explicitly stated.\n"
+            "ELIGIBLE_FOR claims (whether a formulation qualifies for IP protection) MUST always be tagged [INFERRED]. "
+            f"If the CONTEXT does not directly answer the question, respond with EXACTLY: \"{self._FALLBACK}\""
         )
         user_msg = f"CONTEXT:\n{context}\n\nQUESTION: {query}"
 
         try:
-            import ollama
-            client = ollama.Client(host=host) if host else ollama.Client()
-            response = client.chat(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_msg},
-                    {"role": "user",   "content": user_msg},
-                ],
-                options={"temperature": temperature, "num_predict": 512},
-            )
-            answer = response["message"]["content"].strip()
+            api_key = self.neo4j.config.get("llm.synthesis_api_key", "") if hasattr(self.neo4j, "config") else ""
+            base_url = self.neo4j.config.get("llm.synthesis_base_url", "") if hasattr(self.neo4j, "config") else ""
+
+            if api_key:
+                # Use OpenAI-compatible client (Groq, Cerebras, etc.)
+                from openai import OpenAI
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user",   "content": user_msg},
+                    ],
+                    temperature=temperature,
+                    max_tokens=768,
+                )
+                answer = resp.choices[0].message.content.strip()
+            else:
+                # Fallback: local Ollama
+                import ollama
+                client = ollama.Client(host=host)
+                response = client.chat(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user",   "content": user_msg},
+                    ],
+                    options={"temperature": temperature, "num_predict": 768},
+                )
+                answer = response["message"]["content"].strip()
         except Exception as exc:
             logger.warning(f"Ollama generation failed: {exc}")
             answer = f"Error generating answer via LLM: {exc}"
 
-        return {"answer": answer, "sources": results, "context": context}
+        # Phase 6: parse tags from answer and annotate sources
+        import re as _re
+        tags_found = _re.findall(r'\[(CLEAR|AMBIGUOUS|INFERRED)\]', answer)
+
+        return {
+            "answer":   answer,
+            "sources":  sources,
+            "context":  context,
+            "language": language,
+            "tags":     list(set(tags_found)),
+        }

@@ -1,17 +1,20 @@
 """
-ConceptExtractor — Part B2
+ConceptExtractor — IP-SAKTI Domain (Phase 2)
 
 Extracts entities and relationships from document chunks using a local
-Ollama model (default: llama3.2:3b). Runs as an optional post-processing
-layer — never blocks the main ingestion pipeline.
+Ollama model (default: llama3.2:3b). Domain-adapted for Ayurveda IP &
+regulatory corpus.
 
-Key design points:
-- Batches 6-8 chunks per Ollama call to minimise fixed per-call overhead
-  on CPU-only hardware (see plan Part C3).
-- Content-hash SQLite cache: unchanged chunks cost zero LLM calls on
-  re-runs.
-- Falls back gracefully on Ollama unavailability — callers get empty
-  entity lists rather than exceptions.
+Entity types:
+  Formulation, Ingredient, LegalInstrument, Jurisdiction,
+  IPProtectionType, CasePrecedent, RegulatoryBody
+  (+ generic Entity fallback)
+
+Relation types:
+  CONTAINS_INGREDIENT, DOCUMENTED_IN, APPLIES_IN, CITES,
+  GOVERNED_BY, ELIGIBLE_FOR[INFERRED], RELATED_TO
+
+Batches 6-8 chunks per call; SQLite cache; graceful Ollama fallback.
 """
 
 import hashlib
@@ -23,9 +26,44 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Default batch size: 6-8 chunks per call is the sweet spot on 3B models
-# (cuts total call count by ~7x vs one call per chunk).
 DEFAULT_BATCH_SIZE = 7
+
+# Allowlist guards against Cypher injection (D-15)
+VALID_REL_TYPES = {
+    "CONTAINS_INGREDIENT",
+    "DOCUMENTED_IN",
+    "APPLIES_IN",
+    "CITES",
+    "GOVERNED_BY",
+    "ELIGIBLE_FOR",
+    "RELATED_TO",
+    "PART_OF",
+}
+
+# Few-shot example (Biological Diversity Act) for domain grounding
+_FEW_SHOT = """
+Example chunk:
+[CHUNK_ID: ex_001]
+Section 3 of the Biological Diversity Act, 2002: no person shall, without previous approval of the
+National Biodiversity Authority, obtain any biological resource occurring in India.
+
+Example output:
+{
+  "ex_001": {
+    "entities": [
+      {"name": "Biological Diversity Act 2002", "type": "LegalInstrument"},
+      {"name": "National Biodiversity Authority", "type": "RegulatoryBody"},
+      {"name": "India", "type": "Jurisdiction"}
+    ],
+    "relationships": [
+      {"source": "National Biodiversity Authority", "target": "Biological Diversity Act 2002", "relation": "GOVERNED_BY"},
+      {"source": "Biological Diversity Act 2002", "target": "India", "relation": "APPLIES_IN"}
+    ],
+    "inferred_relations": [],
+    "suggested_category": "ip/national_law"
+  }
+}
+"""
 
 
 class ConceptExtractor:
@@ -125,7 +163,10 @@ class ConceptExtractor:
             parsed = {}
 
         for c, h in sub_batch:
-            r = parsed.get(c["chunk_id"], {"entities": [], "relationships": []})
+            r = parsed.get(c["chunk_id"], {
+                "entities": [], "relationships": [],
+                "inferred_relations": [], "suggested_category": "",
+            })
             results[c["chunk_id"]] = r
             try:
                 self._cache.execute(
@@ -151,29 +192,42 @@ class ConceptExtractor:
         return response.get("response", "")
 
     def _build_prompt(self, chunks):
-        """
-        Build a single prompt for multiple chunks.
-        Asks for JSON output keyed by chunk_id.
-        suggested_category is a free field — used by D1 to auto-classify docs
-        with no category frontmatter. Zero extra LLM calls (same batch, one extra field).
-        """
+        """Domain-specific extraction prompt for IP/Ayurveda corpus."""
         chunk_text = "\n\n".join(
             f'[CHUNK_ID: {c["chunk_id"]}]\n{c["text"][:800]}'
             for c in chunks
         )
-        return f"""You are an information extraction system. For each chunk below, extract:
-1. Named entities (people, places, organizations, concepts, technical terms).
-2. Relationships between those entities within the same chunk.
-3. A short category label (1-3 words) that best describes the chunk's topic domain.
+        return f"""You are an information extraction system for Ayurveda IP and regulatory law.
 
-Return ONLY a valid JSON object. No prose. Format:
+For each chunk extract:
+1. Entities — use these types ONLY:
+   Formulation, Ingredient, LegalInstrument, Jurisdiction, IPProtectionType,
+   CasePrecedent, RegulatoryBody, Entity (generic fallback only).
+
+2. Relationships:
+   CONTAINS_INGREDIENT (Formulation→Ingredient)
+   DOCUMENTED_IN (Formulation→LegalInstrument or CasePrecedent)
+   APPLIES_IN (LegalInstrument→Jurisdiction)
+   CITES (CasePrecedent→LegalInstrument)
+   GOVERNED_BY (IPProtectionType or RegulatoryBody→LegalInstrument)
+   RELATED_TO (generic)
+
+3. ELIGIBLE_FOR relations (Formulation→IPProtectionType) go in "inferred_relations",
+   NEVER in "relationships" — they are model-inferred, not legal facts.
+
+4. suggested_category: one of ip/national_law, ip/international_law, ip/case_law,
+   ip/pharmacopoeia, ip/tkdl_methodology, ip/manufacturing_licensing, ip/export_compliance, general.
+
+{_FEW_SHOT}
+
+Return ONLY valid JSON, no prose:
 {{
   "<chunk_id>": {{
-    "entities": [{{"name": "...", "type": "concept|person|org|place|other"}}],
+    "entities": [{{"name": "...", "type": "..."}}],
     "relationships": [{{"source": "...", "target": "...", "relation": "..."}}],
+    "inferred_relations": [{{"source": "...", "target": "...", "relation": "ELIGIBLE_FOR", "confidence": "inferred"}}],
     "suggested_category": "..."
-  }},
-  ...
+  }}
 }}
 
 Chunks:
@@ -183,10 +237,7 @@ JSON:"""
 
     @staticmethod
     def _parse_response(raw, chunks):
-        """
-        Parse the LLM JSON response. Falls back to empty on any parse failure.
-        Tries to extract a JSON object even if surrounded by prose.
-        """
+        """Parse LLM response; validate rel types against allowlist; separate inferred."""
         raw = re.sub(r"^```[a-z]*\n?", "", raw.strip(), flags=re.MULTILINE)
         raw = re.sub(r"```$", "", raw.strip(), flags=re.MULTILINE)
 
@@ -206,9 +257,19 @@ JSON:"""
         for c in chunks:
             cid = c["chunk_id"]
             raw_entry = data.get(cid, {})
+            # Validate relation types — drop unknown (D-15)
+            rels = [
+                r for r in raw_entry.get("relationships", [])
+                if r.get("relation") in VALID_REL_TYPES
+            ]
+            inferred = [
+                r for r in raw_entry.get("inferred_relations", [])
+                if r.get("relation") == "ELIGIBLE_FOR"
+            ]
             result[cid] = {
                 "entities": raw_entry.get("entities", []),
-                "relationships": raw_entry.get("relationships", []),
+                "relationships": rels,
+                "inferred_relations": inferred,
                 "suggested_category": raw_entry.get("suggested_category", ""),
             }
         return result

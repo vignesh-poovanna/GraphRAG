@@ -190,6 +190,100 @@ Any file type
   -> Neo4j + Qdrant storage (unchanged)
 ```
 
+
 The downstream pipeline never sees raw PDF/HTML/DOCX bytes.
 CHUNKING_STRATEGY=fixed bypasses structure-aware logic at DocumentProcessor._chunk_text().
+
+---
+
+## IP-SAKTI Sahayak — Query Flow (Phases 5–9)
+
+```
+User input (text or voice)
+  |
+  |-- [Voice] SpeechPipeline._record_until_silence()
+  |           VAD (silero or energy) → float32 numpy array
+  |           SpeechPipeline._transcribe()  # faster-whisper WhisperModel
+  |
+  |-- SpeechPipeline._maybe_translate()     # langdetect → Groq translate if non-EN
+  |
+  |-- SessionCache.get_history(session_id, last_n=4)   # SQLite
+  |
+  |-- Orchestrator.run(query, session_context=history)
+  |     |
+  |     |-- Orchestrator._classify_query()
+  |     |     Cerebras API (llama3.1-8b) → one of:
+  |     |       novelty_check | jurisdiction_comparison | precedent_lookup | procedural | general
+  |     |
+  |     |-- [novelty_check]
+  |     |     for cat in [ip/tkdl_methodology, ip/pharmacopoeia, ip/case_law]:
+  |     |       QueryEngine.hybrid_search(query, limit=3, category=cat)
+  |     |         → Qdrant vector search (query: prefix, multilingual-e5-large)
+  |     |         → Neo4j graph-adjacent doc expansion
+  |     |         → Concept-graph expansion (Entity→MENTIONS→Chunk)
+  |     |         → merge + rerank by final_score
+  |     |
+  |     |-- [precedent_lookup]
+  |     |     Neo4jManager.get_case_precedents_for_instrument(keyword) per keyword
+  |     |     QueryEngine.hybrid_search(query, category=ip/case_law)
+  |     |
+  |     |-- [jurisdiction_comparison]
+  |     |     Orchestrator._detect_export_route()   # supplement vs drug keyword check
+  |     |     for jur in [India, US, EU, ...]:
+  |     |       Neo4jManager.get_instruments_for_jurisdiction(jur)
+  |     |       QueryEngine.hybrid_search(f"{query} {jur}", category=...)
+  |     |
+  |     |-- [procedural]
+  |     |     QueryEngine.hybrid_search per [ip/manufacturing_licensing, ip/export_compliance]
+  |     |     sort by chunk.metadata.stage using _STAGE_ORDER
+  |     |     build numbered answer directly (no extra LLM call)
+  |     |
+  |     |-- [general]
+  |           QueryEngine.generate_answer() → single-pass
+  |
+  |-- Orchestrator._synthesise(query, chunks, mode, ...)
+  |     |
+  |     |-- Build context string from top-6 chunks
+  |     |-- [Phase 8] prepend session_context (last 4 turns)
+  |     |-- Groq API (llama-3.1-8b-instant) → answer with [CLEAR]/[AMBIGUOUS]/[INFERRED] tags
+  |     |-- verifier.verify_and_downgrade()    # string-overlap; no LLM call
+  |     |-- citation_index.enrich_with_url()   # TSV lookup; no LLM call
+  |     |-- return {answer, sources, trace, mode, language, tags}
+  |
+  |-- SessionCache.add_turn(session_id, "assistant", answer)
+  |
+  |-- [Voice] SpeechPipeline._speak(answer)
+        sentence-split → kokoro-onnx TTS → sounddevice playback
+        _barge_in_listener() in background thread (silero VAD)
+        → if interrupt: SessionCache.save_interruption(); stop playback
+```
+
+## IP-SAKTI Sahayak — Ingestion Flow (Phase 1–3)
+
+```
+data/input/<category>/<file>.[pdf|docx|md|txt|html]
+  |
+  |-- FormatConverter.convert()
+  |     _ensure_frontmatter(): injects jurisdiction, act_or_source_name, year,
+  |                             language, document_type, stage from folder path
+  |     PDF → docling/pdfminer → markdown
+  |
+  |-- DocumentProcessor.process_document()
+  |     _extract_front_matter() → metadata dict
+  |     _structure_aware_chunks():
+  |       split on ## / ### headings
+  |       protect tables/code blocks
+  |       sub-split oversized sections (chunk_size=600, overlap=100)
+  |
+  |-- EmbeddingProcessor.get_embedding(chunk_text, mode='passage')
+  |     "passage: " + text → intfloat/multilingual-e5-large → 1024-dim vector
+  |
+  |-- QdrantManager.import_chunks()    # upsert vector + full metadata payload
+  |
+  |-- [optional] extract_concepts.py
+        ConceptExtractor (Ollama llama3.2:3b) → domain entities + relations
+        Neo4jManager.upsert_domain_entity() / link_domain_relation()
+        Neo4jManager.upsert_inferred_relation() for ELIGIBLE_FOR claims
+```
+
 

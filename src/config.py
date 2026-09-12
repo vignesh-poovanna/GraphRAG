@@ -30,16 +30,45 @@ class Config:
                 "collection": os.getenv("QDRANT_COLLECTION", "document_chunks")
             },
             "embedding": {
-                "model": os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
-                "dimension": int(os.getenv("EMBEDDING_DIMENSION", 384))
+                # Phase 3: multilingual-e5-large for cross-lingual retrieval (1024-dim)
+                "model_name": os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-large"),
+                "dimension": int(os.getenv("EMBEDDING_DIMENSION", 1024)),
+                "device": os.getenv("EMBEDDING_DEVICE", "cpu"),
+                "max_length": int(os.getenv("EMBEDDING_MAX_LENGTH", 512)),
+                # Legacy alias kept for qdrant_manager compat
+                "vector_size": int(os.getenv("EMBEDDING_DIMENSION", 1024)),
             },
             "chunking": {
                 "chunk_size": int(os.getenv("CHUNK_SIZE", 600)),
                 "chunk_overlap": int(os.getenv("CHUNK_OVERLAP", 100)),
-                "strategy": os.getenv("CHUNKING_STRATEGY", "structure_aware"),  # "fixed" | "structure_aware"
+                "strategy": os.getenv("CHUNKING_STRATEGY", "structure_aware"),
                 "max_chunk_size": int(os.getenv("MAX_CHUNK_SIZE", 1000)),
                 "keep_tables_atomic": os.getenv("KEEP_TABLES_ATOMIC", "true").lower() == "true",
-            }
+            },
+            # Phase 7: EXTRACTION_LLM (local Ollama) vs SYNTHESIS_LLM (Groq)
+            "llm": {
+                "extraction_model": os.getenv("EXTRACTION_LLM", "llama3.2:3b"),
+                "synthesis_model": os.getenv("SYNTHESIS_LLM", "llama-3.1-8b-instant"),
+                "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+                "synthesis_api_key": os.getenv("SYNTHESIS_LLM_API_KEY", ""),
+                "synthesis_base_url": os.getenv("SYNTHESIS_LLM_BASE_URL", "https://api.groq.com/openai/v1"),
+                # Cerebras: fast query classification (experimental)
+                "classification_model": os.getenv("CEREBRAS_MODEL", "llama3.1-8b"),
+                "classification_api_key": os.getenv("CEREBRAS_API_KEY", ""),
+                "classification_base_url": os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"),
+            },
+            "language": {
+                "detect": os.getenv("LANGUAGE_DETECT", "true").lower() == "true",
+            },
+            # Phase 8: Speech pipeline
+            "speech": {
+                "stt_model": os.getenv("SPEECH_STT_MODEL", "base"),
+                "stt_device": os.getenv("SPEECH_STT_DEVICE", "cpu"),
+                "tts_voice": os.getenv("SPEECH_TTS_VOICE", "af_heart"),
+                "tts_speed": float(os.getenv("SPEECH_TTS_SPEED", "1.0")),
+                "vad_threshold": float(os.getenv("SPEECH_VAD_THRESHOLD", "0.5")),
+                "session_cache": os.getenv("SPEECH_SESSION_CACHE", "./data/session_cache.db"),
+            },
         }
         
         # Override with YAML config if provided and is a YAML file
@@ -113,8 +142,11 @@ QDRANT_HOST = config.get('qdrant.host')
 QDRANT_PORT = config.get('qdrant.port')
 QDRANT_COLLECTION = config.get('qdrant.collection')
 
-EMBEDDING_MODEL = config.get('embedding.model')
+EMBEDDING_MODEL = config.get('embedding.model_name')
 EMBEDDING_DIMENSION = config.get('embedding.dimension')
+
+EXTRACTION_LLM = config.get('llm.extraction_model')
+SYNTHESIS_LLM = config.get('llm.synthesis_model')
 
 CHUNKING_STRATEGY = config.get('chunking.strategy')
 MAX_CHUNK_SIZE = config.get('chunking.max_chunk_size')

@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IP-SAKTI — SIH2026045</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F3FBF7;
+      --bg-soft: #EAF7F1;
+      --card: #FFFFFF;
+      --border: #E1EDE7;
+      --accent: #12B387;
+      --accent-dark: #0C9670;
+      --accent-soft: #E4F7EF;
+      --text: #0F2019;
+      --text-muted: #62766E;
+      --text-faint: #97A9A2;
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 1px 2px rgba(15, 32, 25, 0.04), 0 8px 24px rgba(15, 32, 25, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background:
+        radial-gradient(1200px 500px at 15% -10%, #E9F8F1 0%, rgba(233, 248, 241, 0) 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .display {
+      font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    }
+
+    /* ---------- Header ---------- */
+    header {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 22px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(160deg, var(--accent), var(--accent-dark));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(18, 179, 135, 0.28);
+    }
+
+    .brand-mark svg {
+      width: 18px;
+      height: 18px;
+      color: #fff;
+    }
+
+    .brand-name {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-tag {
+      font-size: 11px;
+      color: var(--text-faint);
+      font-weight: 600;
+      margin-top: -2px;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    nav a svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .btn-ghost {
+      color: var(--text);
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 14.5px;
+    }
+
+    .btn-primary-nav {
+      background: var(--text);
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 14.5px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+
+    .theme-dot {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* ---------- Main grid ---------- */
+    main {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 28px 32px 90px;
+      display: grid;
+      grid-template-columns: 1.02fr 1fr;
+      gap: 56px;
+      align-items: start;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      padding: 7px 15px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid #CDEEE0;
+    }
+
+    .badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-dark);
+    }
+
+    h1 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      font-size: clamp(38px, 4.6vw, 60px);
+      line-height: 1.05;
+      letter-spacing: -0.025em;
+      margin: 22px 0 20px;
+    }
+
+    .lede {
+      color: var(--text-muted);
+      font-size: 17px;
+      line-height: 1.65;
+      max-width: 520px;
+      margin: 0 0 40px;
+    }
+
+    .grid-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .feature {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 20px 22px;
+    }
+
+    .feature-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--accent-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-dark);
+      margin-bottom: 14px;
+    }
+
+    .feature-icon svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    .feature h3 {
+      font-size: 15.5px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* ---------- Right panel ---------- */
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      position: sticky;
+      top: 24px;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .panel-head-left {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .panel-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      background: var(--accent-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-dark);
+      flex-shrink: 0;
+    }
+
+    .panel-icon svg {
+      width: 19px;
+      height: 19px;
+    }
+
+    .panel-title {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .panel-sub {
+      font-size: 12.5px;
+      color: var(--text-faint);
+      margin-top: 1px;
+    }
+
+    .mode-toggle {
+      display: flex;
+      background: var(--bg-soft);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .mode-toggle button {
+      border: none;
+      background: transparent;
+      width: 34px;
+      height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: background .15s ease, color .15s ease;
+    }
+
+    .mode-toggle button svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .mode-toggle button.active {
+      background: var(--text);
+      color: #fff;
+    }
+
+    .chat-area {
+      border: 1.5px dashed #D3E9DF;
+      border-radius: var(--radius-md);
+      min-height: 250px;
+      background: #FBFEFC;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 18px;
+    }
+
+    .chat-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 12px;
+      padding: 22px 10px;
+    }
+
+    .chat-empty-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-dark);
+    }
+
+    .chat-empty-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .chat-empty h4 {
+      font-size: 15.5px;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .chat-empty p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    .chat-empty a {
+      color: var(--accent-dark);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .messages {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+      max-height: 320px;
+      padding-right: 2px;
+    }
+
+    .messages.show {
+      display: flex;
+    }
+
+    .msg {
+      display: flex;
+      gap: 10px;
+      max-width: 92%;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .msg-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .msg.bot .msg-avatar {
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+    }
+
+    .msg.user .msg-avatar {
+      background: var(--text);
+      color: #fff;
+    }
+
+    .msg-bubble {
+      background: var(--bg-soft);
+      border-radius: 14px 14px 14px 4px;
+      padding: 11px 14px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--text);
+    }
+
+    .msg.user .msg-bubble {
+      background: var(--text);
+      color: #fff;
+      border-radius: 14px 14px 4px 14px;
+    }
+
+    .citation {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 999px;
+      margin-top: 8px;
+    }
+
+    .citation svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .eyebrow {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--accent-dark);
+      letter-spacing: 0.02em;
+      margin-bottom: 6px;
+    }
+
+    .panel h3.section-title {
+      font-size: 19px;
+      font-weight: 800;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      margin: 0 0 6px;
+      letter-spacing: -0.015em;
+    }
+
+    .section-desc {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin: 0 0 18px;
+      line-height: 1.5;
+    }
+
+    .field-label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 7px;
+      display: block;
+    }
+
+    .field-label .req {
+      color: #E0654A;
+    }
+
+    .input-row {
+      position: relative;
+      margin-bottom: 14px;
+    }
+
+    .input-row input[type="text"] {
+      width: 100%;
+      padding: 12px 78px 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+      transition: border-color .15s ease;
+    }
+
+    .input-row input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    .input-row input::placeholder {
+      color: var(--text-faint);
+    }
+
+    .input-icons {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 4px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: background .15s ease, color .15s ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--bg-soft);
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .icon-btn.mic.recording {
+      background: #FDEDEA;
+      color: #D9503B;
+      animation: pulse 1.2s infinite;
+    }
+
+    .icon-btn.send {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .icon-btn.send:hover {
+      background: var(--accent-dark);
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(217, 80, 59, 0.25);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(217, 80, 59, 0);
+      }
+    }
+
+    .lang-hint {
+      font-size: 12px;
+      color: var(--text-faint);
+      margin: -6px 0 18px;
+    }
+
+    .row-fields {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pill-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      padding: 9px 15px;
+      border-radius: 999px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .pill-btn svg {
+      width: 14px;
+      height: 14px;
+      color: var(--accent-dark);
+    }
+
+    .pill-btn.select select {
+      border: none;
+      background: transparent;
+      font: inherit;
+      color: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .wand-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-dark);
+      cursor: pointer;
+    }
+
+    .wand-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .footer-row {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .ask-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 13px 22px;
+      border-radius: 12px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(18, 179, 135, 0.28);
+      transition: background .15s ease, transform .1s ease;
+      font-family: inherit;
+    }
+
+    .ask-btn:hover {
+      background: var(--accent-dark);
+    }
+
+    .ask-btn:active {
+      transform: translateY(1px);
+    }
+
+    .ask-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    @media (max-width:960px) {
+      main {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .grid-cards {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      header {
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      nav {
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .panel {
+        position: static;
+      }
+    }
+
+    @media (max-width:520px) {
+
+      header,
+      main {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      .grid-cards {
+        grid-template-columns: 1fr;
+      }
+
+      .row-fields {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .footer-row {
+        justify-content: stretch;
+      }
+
+      .ask-btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M12 2 3 14h7l-1 8 9-12h-7l1-8z" />
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">IP-SAKTI</div>
+      </div>
+    </div>
+    <nav>
+      <a href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+        Dashboard
+      </a>
+      <a href="#" class="btn-ghost">Sources</a>
+      <a href="#" class="btn-primary-nav">Try IP-SAKTI</a>
+      <div class="theme-dot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+        </svg>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <!-- LEFT COLUMN -->
+    <div>
+      <span class="badge"><span class="dot"></span>SIH2026045</span>
+
+      <h1 class="display">Ask Ayurveda's<br>hardest IP questions<br>with proof.</h1>
+
+      <p class="lede">
+        Cross-reference traditional knowledge records, Indian IP law, and international
+        frameworks in one multilingual conversation — every answer traced back to the
+        exact document it came from.
+      </p>
+
+      <div class="grid-cards">
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z" />
+            </svg>
+          </div>
+          <h3>Traceable citations</h3>
+          <p>Every answer links to the exact clause, section, or record it was drawn from.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="m8.5 12.5 2.5 2.5 5-5" />
+            </svg>
+          </div>
+          <h3>Cross-source reasoning</h3>
+          <p>Combines TK records, national law, and international regimes in a single query.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M4 5h11M4 5c0 5.5 3 9 7 10M4 5c0 3 1.5 5.2 4 6.7M20 19h-7M20 19c0-5.5-3-9-7-10M20 19c0-3-1.5-5.2-4-6.7" />
+            </svg>
+          </div>
+          <h3>Multilingual retrieval</h3>
+          <p>Searches classical texts and community records in their original language.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z" />
+              <path d="M12 8v5" />
+              <circle cx="12" cy="16" r=".6" fill="currentColor" stroke="none" />
+            </svg>
+          </div>
+          <h3>Ambiguity guardrail</h3>
+          <p>Flags jurisdiction-dependent or unsettled questions instead of guessing.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: CHAT PANEL -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-head-left">
+          <div class="panel-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-4-1L3 20l1.1-3.7a8.4 8.4 0 0 1-1.1-4A8.5 8.5 0 0 1 11.5 4c4.7 0 8.5 3.4 9.5 7.5Z" />
+            </svg>
+          </div>
+          <div>
+            <div class="panel-title">IP-SAKTI Assistant</div>
+            <div class="panel-sub" id="citeCount">0 sources cited</div>
+          </div>
+        </div>
+        <div class="mode-toggle">
+          <button class="active" id="modeText" title="Text mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-4-1L3 20l1.1-3.7a8.4 8.4 0 0 1-1.1-4A8.5 8.5 0 0 1 11.5 4c4.7 0 8.5 3.4 9.5 7.5Z" />
+            </svg>
+          </button>
+          <button id="modeVoice" title="Voice mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0M12 17v4M9 21h6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="chat-area">
+        <div class="chat-empty" id="chatEmpty">
+          <div class="chat-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-4-1L3 20l1.1-3.7a8.4 8.4 0 0 1-1.1-4A8.5 8.5 0 0 1 11.5 4c4.7 0 8.5 3.4 9.5 7.5Z" />
+            </svg>
+          </div>
+          <h4>Ask your first question</h4>
+          <p>Type below or <a href="#" id="tryVoice">use voice input</a> — answers arrive with the source attached.</p>
+        </div>
+        <div class="messages" id="messages"></div>
+      </div>
+
+      <div class="eyebrow">ASK IP-SAKTI</div>
+      <h3 class="section-title">Ask a question</h3>
+      <p class="section-desc">Get an answer traced to its source document, in your language.</p>
+
+      <div class="input-row">
+        <input type="text" id="questionInput" placeholder="e.g. Can I patent this triphala formulation?">
+        <div class="input-icons">
+          <button class="icon-btn mic" id="micBtn" title="Voice input">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0M12 17v4M9 21h6" />
+            </svg>
+          </button>
+          <button class="icon-btn send" id="sendBtn" title="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="m5 12 14-7-7 14-2-6-5-1Z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="row-fields">
+        <div class="pill-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z" />
+          </svg>
+          Jurisdiction &amp; Scope
+        </div>
+        <div class="pill-btn select">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path
+              d="M4 5h11M4 5c0 5.5 3 9 7 10M4 5c0 3 1.5 5.2 4 6.7M20 19h-7M20 19c0-5.5-3-9-7-10M20 19c0-3-1.5-5.2-4-6.7" />
+          </svg>
+          <select id="langSelect">
+            <option>English</option>
+            <option>हिन्दी</option>
+            <option>संस्कृतम्</option>
+            <option>தமிழ்</option>
+            <option>മലയാളം</option>
+          </select>
+        </div>
+        <button class="wand-btn" title="Suggest a question">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2Z" />
+            <path d="M4 20 15 9" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="footer-row">
+        <button class="ask-btn" id="askBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="m5 12 14-7-7 14-2-6-5-1Z" />
+          </svg>
+          Ask IP-SAKTI
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const input = document.getElementById('questionInput');
+    const messagesEl = document.getElementById('messages');
+    const chatEmpty = document.getElementById('chatEmpty');
+    const citeCount = document.getElementById('citeCount');
+    const micBtn = document.getElementById('micBtn');
+    const modeText = document.getElementById('modeText');
+    const modeVoice = document.getElementById('modeVoice');
+    let cites = 0;
+
+    const sampleAnswers = [
+      { text: "This formulation appears in a documented TKDL record, which weighs against novelty for a patent claim in most jurisdictions.", src: "TKDL/AY/1123 · Sec. 4" },
+      { text: "Under the Biological Diversity Act, prior approval from the National Biodiversity Authority is required before filing.", src: "BD Act 2002, S.6" },
+      { text: "The EU's GI framework requires proof of a link between the product and its geographical origin — this is jurisdiction-specific and unsettled for compound formulations.", src: "EU Reg. 1151/2012, Art.5" }
+    ];
+    let i = 0;
+
+    function sendMessage() {
+      const val = input.value.trim();
+      if (!val) return;
+      chatEmpty.style.display = 'none';
+      messagesEl.classList.add('show');
+
+      const userMsg = document.createElement('div');
+      userMsg.className = 'msg user';
+      userMsg.innerHTML = `<div class="msg-avatar">You</div><div class="msg-bubble">${val.replace(/</g, '&lt;')}</div>`;
+      messagesEl.appendChild(userMsg);
+
+      input.value = '';
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      setTimeout(() => {
+        const ans = sampleAnswers[i % sampleAnswers.length];
+        i++;
+        cites++;
+        citeCount.textContent = cites + (cites === 1 ? ' source cited' : ' sources cited');
+        const botMsg = document.createElement('div');
+        botMsg.className = 'msg bot';
+        botMsg.innerHTML = `<div class="msg-avatar">AI</div><div class="msg-bubble">${ans.text}<div class="citation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>${ans.src}</div></div>`;
+        messagesEl.appendChild(botMsg);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }, 500);
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+    document.getElementById('askBtn').addEventListener('click', sendMessage);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+    let recording = false;
+    micBtn.addEventListener('click', () => {
+      recording = !recording;
+      micBtn.classList.toggle('recording', recording);
+      if (recording) { input.placeholder = 'Listening…'; }
+      else { input.placeholder = 'e.g. Can I patent this triphala formulation?'; }
+    });
+    document.getElementById('tryVoice').addEventListener('click', e => { e.preventDefault(); micBtn.click(); });
+
+    modeVoice.addEventListener('click', () => {
+      modeVoice.classList.add('active');
+      modeText.classList.remove('active');
+    });
+    modeText.addEventListener('click', () => {
+      modeText.classList.add('active');
+      modeVoice.classList.remove('active');
+    });
+  </script>
+
+</body>
+
+</html>

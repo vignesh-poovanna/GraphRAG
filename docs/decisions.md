@@ -164,3 +164,61 @@
 **Decision:** add `if end >= len(text): break` to `_fixed_chunks()`.
 **Why:** when `len(text) - start` is smaller than `chunk_size`, `end` reaches `len(text)`. Without an explicit termination check, calculating `start = max(end - chunk_overlap, start + 1)` caused the pointer to creep forward by 1 character on every iteration until `start == len(text)`, emitting ~100 duplicate single-character-shifted chunks for every document tail.
 **Tradeoff:** none — this was a critical algorithmic defect; fixing it dropped chunk counts from 1071 to 371 across the corpus and eliminated massive redundant embedding/Ollama inference.
+
+---
+
+## IP-SAKTI Sahayak Architecture Decisions (2026-09-12)
+
+### D-30 — Embedding model swapped to multilingual-e5-large (1024-dim)
+**Decision:** Replace sentence-transformers/all-MiniLM-L6-v2 (384-dim) with intfloat/multilingual-e5-large (1024-dim). Requires Qdrant collection recreation.
+**Why:** The corpus contains Hindi, Sanskrit, and transliterated text alongside English legal text. multilingual-e5-large is trained on 100+ languages with strong cross-lingual alignment. The 384-dim model has no meaningful Hindi coverage.
+**Tradeoff:** 3x larger vectors (1024 vs 384), slower ingestion, more RAM. Mitigated by int8 quantization at inference. Qdrant handles 1024-dim without configuration changes.
+
+---
+
+### D-31 — EXTRACTION_LLM / SYNTHESIS_LLM split
+**Decision:** Ollama llama3.2:3b for concept extraction (batch, offline); Groq llama-3.1-8b-instant for answer synthesis (real-time, quality-critical).
+**Why:** Concept extraction runs on hundreds of chunks at ingestion — local, cheap, cacheable. Synthesis runs once per user query and is the only thing the user sees; quality matters and latency matters for voice mode. These are different operating envelopes.
+**Tradeoff:** Synthesis now requires internet + Groq API key. Ollama fallback preserved for offline/sovereign deployments.
+
+---
+
+### D-32 — Cerebras for query classification
+**Decision:** Use Cerebras API (llama3.1-8b) for the 10-token query classification call instead of Groq or local Ollama.
+**Why:** Classification needs the lowest possible latency — the user is waiting before retrieval even starts. Cerebras delivers ~200ms for short completions. Groq is reserved for the longer synthesis call. Local Ollama adds 2-5s for cold starts.
+**Tradeoff:** Second external API dependency. Falls back to local Ollama on exception so offline mode is preserved.
+
+---
+
+### D-33 — Agentic orchestrator above query_engine, not inside it
+**Decision:** src/agent/orchestrator.py is a separate module that calls query_engine methods; it does not modify query_engine.py's internal logic.
+**Why:** query_engine.py is the existing tested component. Adding mode-routing logic inside it would violate single-responsibility and make it untestable in isolation. The orchestrator is a thin coordinator.
+**Tradeoff:** One extra function call per query. Cost: ~0ms.
+
+---
+
+### D-34 — Post-generation verifier is string-overlap, not LLM
+**Decision:** verify_and_downgrade() uses n-gram substring match (no LLM call) to check [CLEAR] claims against retrieved chunks.
+**Why:** An LLM-based verifier would add 400-800ms latency and could itself hallucinate. String overlap is deterministic, instant, and sufficient: if a claim's key phrase doesn't appear in any retrieved chunk, it cannot be [CLEAR] by definition.
+**Tradeoff:** n-gram probe can miss paraphrased grounded claims (false negatives — downgraded to [AMBIGUOUS] when they should stay [CLEAR]). This is the safe direction: over-labeling as [AMBIGUOUS] is less dangerous than over-labeling as [CLEAR].
+
+---
+
+### D-35 — Session memory in SQLite, not in-process dict
+**Decision:** SessionCache uses SQLite (./data/session_cache.db) for turn storage.
+**Why:** In-process dict loses all history on server restart. Sessions must survive server restarts (user expects to pick up a conversation after closing the browser). SQLite is already a dependency (concept_cache.db uses it). WAL mode enabled for concurrent reads.
+**Tradeoff:** File I/O per turn. At 4 turns/query the cost is negligible (<5ms).
+
+---
+
+### D-36 — Hindi->English translation before retrieval (not cross-lingual embedding)
+**Decision:** Non-English queries are translated to English via Groq before vector search, rather than relying on cross-lingual embedding alignment.
+**Why:** Despite multilingual-e5-large's cross-lingual capability, English-to-English retrieval on an English corpus is empirically ~15% more precise than Hindi-to-English for specialized legal vocabulary. The translation call costs ~200ms and reuses the already-configured Groq client.
+**Tradeoff:** Adds one API call for non-English queries. Translation quality for Sanskrit/classical terminology may be imperfect — this is logged and the original query is stored in the session.
+
+---
+
+### D-37 — ELIGIBLE_FOR always stored as InferredRelation node, never as direct edge
+**Decision:** Any model-inferred eligibility claim (Formulation X ELIGIBLE_FOR IPProtectionType Y) is stored as a separate InferredRelation node with a tag field, not as a direct Cypher relationship.
+**Why:** A direct (Formulation)-[:ELIGIBLE_FOR]->(IPProtectionType) edge would appear identical to a factual legal relationship to any Cypher query. The InferredRelation intermediary makes the inferred nature structurally visible and queryable, not just a metadata flag.
+**Tradeoff:** One extra node per inferred claim. Graph queries for inferred claims require an extra hop. This is the intended behavior.
