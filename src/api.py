@@ -13,7 +13,8 @@ Endpoints:
 
 CORS is enabled for localhost:3000 (React dev server).
 Run:
-  uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+#   uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+# Reloaded for updated environment configuration
 """
 
 import base64

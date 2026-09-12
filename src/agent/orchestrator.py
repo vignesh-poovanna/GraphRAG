@@ -25,8 +25,17 @@ logger = logging.getLogger(__name__)
 _JURISDICTIONS = ["India", "US", "EU", "WIPO", "International"]
 
 # Category filters for each mode's primary retrieval pass
-_NOVELTY_CATEGORIES = ["ip/tkdl_methodology", "ip/pharmacopoeia", "ip/case_law"]
-_PROCEDURAL_CATEGORIES = ["ip/manufacturing_licensing", "ip/export_compliance"]
+_NOVELTY_CATEGORIES = [
+    "Ayurveda & Traditional Knowledge",
+    "Patent Law & Examination",
+    "Biodiversity & Access-Benefit Sharing",
+]
+_PROCEDURAL_CATEGORIES = [
+    "Patent Law & Examination",
+    "Trademarks & Geographical Indications",
+    "Biodiversity & Access-Benefit Sharing",
+    "Copyrights & Digital Media",
+]
 
 # Procedural stage order (Patch v1.1)
 _STAGE_ORDER = ["application", "documentation", "inspection", "certification", "renewal", "penalty"]
@@ -120,11 +129,15 @@ class Orchestrator:
         Uses Cerebras (fast, low-latency) when API key is set; falls back to local Ollama.
         """
         prompt = f"""Classify this legal/regulatory query into exactly one category:
-- novelty_check: asks whether a formulation/ingredient is novel, patentable, or has prior art
-- jurisdiction_comparison: asks for comparison across countries/legal systems (India vs US, EU requirements, etc.)
-- precedent_lookup: asks about a specific legal case, ruling, or precedent
-- procedural: asks how to obtain a license, register, apply, file, or follow a regulatory process
-- general: any other regulatory or IP question
+- novelty_check: asks whether a formulation/ingredient/product is novel, patentable, or has prior art in any country
+- jurisdiction_comparison: explicitly compares two or more named countries/legal systems side-by-side (e.g. "India vs US", "India and EU")
+- precedent_lookup: asks about a specific NAMED court CASE or tribunal RULING (e.g. "Novartis v Union of India", "neem patent case")
+- procedural: asks HOW TO do something — obtain a license, register, apply, file, or follow a step-by-step regulatory process
+- general: any other question including what a statute/section SAYS or MEANS, definitions, compliance requirements, impact of a treaty/protocol
+
+IMPORTANT: Questions asking what a section or provision says ("What does Section 3(p) say?") → general.
+IMPORTANT: Questions about a treaty's or protocol's effect/impact → general.
+IMPORTANT: jurisdiction_comparison ONLY when two or more specific countries are named for comparison.
 
 Query: {query}
 
@@ -132,11 +145,20 @@ Reply with ONLY the category name, nothing else."""
 
         mode = "general"
         try:
-            if self._classify_api_key:
-                from openai import OpenAI
+            from openai import OpenAI
+            client = None
+            model = None
+
+            if self._synthesis_api_key:
+                client = OpenAI(api_key=self._synthesis_api_key, base_url=self._synthesis_base_url)
+                model = self._synthesis_model
+            elif self._classify_api_key:
                 client = OpenAI(api_key=self._classify_api_key, base_url=self._classify_base_url)
+                model = self._classify_model
+
+            if client and model:
                 resp = client.chat.completions.create(
-                    model=self._classify_model,
+                    model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
                     max_tokens=10,
@@ -158,7 +180,7 @@ Reply with ONLY the category name, nothing else."""
         except Exception as e:
             logger.warning("Query classification failed (%s); defaulting to general", e)
 
-        trace.append({"step": "classify_llm", "mode": mode, "backend": "cerebras" if self._classify_api_key else "ollama"})
+        trace.append({"step": "classify_llm", "mode": mode, "backend": "groq" if self._synthesis_api_key else ("cerebras" if self._classify_api_key else "ollama")})
         return mode
 
     # ------------------------------------------------------------------
@@ -167,25 +189,10 @@ Reply with ONLY the category name, nothing else."""
 
     def _novelty_check(self, query: str, trace: list) -> list:
         """
-        Novelty-check mode: run hybrid_search against TKDL/pharmacopoeia/case_law first,
-        then fall back to statute text if no prior-art match found.
+        Novelty-check mode: run hybrid_search for prior-art and statutory criteria.
         """
-        all_chunks = []
-        for cat in _NOVELTY_CATEGORIES:
-            results = self.qe.hybrid_search(query, limit=3, category=cat)
-            trace.append({
-                "step": "retrieval",
-                "category": cat,
-                "chunks_found": len(results),
-                "query": query,
-            })
-            all_chunks.extend(results)
-
-        if not all_chunks:
-            # Fallback: unrestricted hybrid search
-            all_chunks = self.qe.hybrid_search(query, limit=5)
-            trace.append({"step": "retrieval_fallback", "chunks_found": len(all_chunks)})
-
+        all_chunks = self.qe.hybrid_search(query, limit=10)
+        trace.append({"step": "retrieval", "chunks_found": len(all_chunks)})
         return all_chunks
 
     def _precedent_lookup(self, query: str, trace: list) -> list:
@@ -214,24 +221,30 @@ Reply with ONLY the category name, nothing else."""
 
     def _jurisdiction_comparison(self, query: str, trace: list, language: str) -> dict:
         """
-        Jurisdiction-comparison mode: parallel retrieval per jurisdiction.
-        Returns a structured comparison dict with per-jurisdiction answers.
+        Jurisdiction-comparison mode.
 
-        Patch v1.1: first classifies supplement/food route vs drug/medicinal route
-        for cross-border export queries before routing to sub-corpus.
+        Patch v1.2: only do per-jurisdiction parallel retrieval when the query
+        EXPLICITLY names two or more jurisdictions for comparison (e.g. "India vs US").
+        If fewer than 2 jurisdictions are explicitly named, treat it as a general
+        retrieval so we don't poison the search query with "India", "US", "EU" suffixes.
         """
-        # Detect which jurisdictions are mentioned; default to all if none explicit
         mentioned = [j for j in _JURISDICTIONS if j.lower() in query.lower()]
-        if not mentioned:
-            mentioned = ["India", "US", "EU"]
 
-        # Patch v1.1: detect export route fork (supplement vs drug)
+        # ---- Single-jurisdiction (or no jurisdiction) query ----------------
+        # e.g. "How does the Nagoya Protocol affect Ayurvedic exports?"
+        # Appending country names would hurt retrieval; just do a clean hybrid search.
+        if len(mentioned) < 2:
+            trace.append({"step": "jurisdiction_single_pass",
+                          "reason": "fewer than 2 jurisdictions mentioned; using clean hybrid search"})
+            all_chunks = self.qe.hybrid_search(query, limit=10)
+            trace.append({"step": "retrieval", "chunks_found": len(all_chunks)})
+            return self._synthesise(query, all_chunks, "jurisdiction_comparison", trace, language)
+
+        # ---- True multi-jurisdiction comparison ----------------------------
         route_hint = self._detect_export_route(query, trace)
-
         per_jurisdiction = {}
         all_chunks = []
         for jur in mentioned:
-            # Get legal instruments for this jurisdiction from graph
             instruments = self.qe.neo4j.get_instruments_for_jurisdiction(jur, limit=5)
             trace.append({
                 "step": "graph_jurisdiction",
@@ -239,14 +252,9 @@ Reply with ONLY the category name, nothing else."""
                 "instruments_found": len(instruments),
                 "route_hint": route_hint,
             })
-
-            # Filter category based on route_hint
-            category = None
-            if route_hint == "export_compliance":
-                category = "ip/export_compliance"
-
+            category = "ip/export_compliance" if route_hint == "export_compliance" else None
             jur_chunks = self.qe.hybrid_search(
-                f"{query} {jur}", limit=3, category=category
+                f"{query} {jur}", limit=4, category=category
             )
             trace.append({
                 "step": "retrieval",
@@ -257,7 +265,6 @@ Reply with ONLY the category name, nothing else."""
             per_jurisdiction[jur] = jur_chunks
             all_chunks.extend(jur_chunks)
 
-        # Synthesise a combined answer but also expose per-jurisdiction breakdown
         synthesis = self._synthesise(query, all_chunks, "jurisdiction_comparison",
                                      trace, language, jurisdiction_map=per_jurisdiction)
         synthesis["jurisdiction_map"] = {
@@ -268,54 +275,11 @@ Reply with ONLY the category name, nothing else."""
 
     def _procedural(self, query: str, trace: list, language: str) -> dict:
         """
-        Procedural mode (Patch v1.1): retrieve licensing/export chunks,
-        order them by stage metadata, render as numbered sequence.
+        Procedural mode: retrieve licensing/export/regulatory chunks and synthesise.
         """
-        all_chunks = []
-        for cat in _PROCEDURAL_CATEGORIES:
-            results = self.qe.hybrid_search(query, limit=5, category=cat)
-            trace.append({"step": "retrieval", "category": cat, "chunks_found": len(results)})
-            all_chunks.extend(results)
-
-        # Stage ordering via metadata — not LLM inference (preserves no-hallucination guarantee)
-        def _stage_rank(chunk):
-            stage = (chunk.get("metadata") or {}).get("stage", "") or chunk.get("stage", "")
-            try:
-                return _STAGE_ORDER.index(stage)
-            except ValueError:
-                return len(_STAGE_ORDER)  # unknown stages go last
-
-        ordered = sorted(all_chunks, key=_stage_rank)
-        trace.append({"step": "stage_ordering", "chunks_ordered": len(ordered)})
-
-        # Build procedural answer string directly (no extra LLM call for ordering)
-        procedural_notes = []
-        for i, chunk in enumerate(ordered[:8], 1):
-            meta = chunk.get("metadata") or {}
-            stage = meta.get("stage") or chunk.get("stage", "")
-            citation_src = chunk.get("metadata") or {}
-            from src.utils.citation_formatter import format_citation
-            cite = format_citation(citation_src)
-            note_type = "Procedural note" if (
-                cite == "Unknown Source" or "portal" in chunk.get("text", "").lower()
-            ) else f"According to {cite}"
-            procedural_notes.append(
-                f"{i}. [{stage.upper() or 'STEP'}] {note_type}: {chunk.get('text', '')[:300]}"
-            )
-
-        answer = "\n".join(procedural_notes) if procedural_notes else self.qe._FALLBACK
-
-        from src.utils.citation_formatter import format_source_object
-        sources = [format_source_object(c) for c in ordered[:8]]
-
-        return {
-            "answer":   answer,
-            "sources":  sources,
-            "trace":    trace,
-            "mode":     "procedural",
-            "language": language,
-            "tags":     ["[CLEAR]"],
-        }
+        all_chunks = self.qe.hybrid_search(query, limit=10)
+        trace.append({"step": "retrieval", "chunks_found": len(all_chunks)})
+        return self._synthesise(query, all_chunks, "procedural", trace, language)
 
     # ------------------------------------------------------------------
     # Final synthesis (shared by novelty_check, precedent_lookup, jurisdiction_comparison)
@@ -343,15 +307,20 @@ Reply with ONLY the category name, nothing else."""
 
         # Override qdrant manager's results by directly building the context
         context_chunks = [c.get("text", "") for c in chunks if c.get("text")]
-        context = "\n---\n".join(context_chunks[:6])  # cap at 6 chunks for context window
+        context = "\n---\n".join(context_chunks[:8])  # cap at 8 chunks for context window
 
         system_msg = (
-            "You are a read-only retrieval assistant for Ayurveda IP and regulatory law. "
-            "Your ONLY job is to extract and quote relevant information from the CONTEXT block below. "
-            "Do NOT use knowledge from your training data. "
-            "For each factual claim, prefix with [CLEAR], [AMBIGUOUS], or [INFERRED] as appropriate. "
-            "ELIGIBLE_FOR claims MUST always be [INFERRED]. "
-            f"If CONTEXT does not answer the question, say exactly: \"{self.qe._FALLBACK}\""
+            "You are an expert regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
+            "You MUST synthesize a grounded answer from the CONTEXT block below. "
+            "The CONTEXT contains statutory provisions, treaty text, guidelines, and regulatory documents. "
+            "Even when the context does not name the exact product/treaty mentioned in the question, "
+            "derive the applicable legal rules and requirements from related statutory provisions in the context. "
+            "For each factual claim, prefix it with one of these confidence tags:\n"
+            "  [CLEAR] — directly stated in a retrieved source.\n"
+            "  [AMBIGUOUS] — present in sources but conflicting or genuinely unsettled.\n"
+            "  [INFERRED] — you are inferring regulatory implications from related statutory text.\n"
+            "ELIGIBLE_FOR claims MUST always be tagged [INFERRED]. "
+            f"Only if the CONTEXT is completely empty or contains ZERO relevant statutory or regulatory content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
         )
 
         # Include session context for continuity (Phase 8)
@@ -388,8 +357,13 @@ Reply with ONLY the category name, nothing else."""
             logger.warning("Synthesis LLM failed (%s)", e)
             answer = f"LLM synthesis error: {e}"
 
+        # If answer is fallback, don't return unrelated sources
+        if self.qe._FALLBACK in answer or answer.strip() == self.qe._FALLBACK:
+            sources = []
+        else:
+            sources = [format_source_object(c) for c in chunks[:6]]
+
         tags_found = list(set(_re.findall(r'\[(CLEAR|AMBIGUOUS|INFERRED)\]', answer)))
-        sources = [format_source_object(c) for c in chunks[:6]]
 
         # Phase 9: post-generation guardrail — downgrade ungrounded [CLEAR] claims
         try:

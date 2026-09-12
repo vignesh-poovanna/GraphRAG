@@ -52,21 +52,15 @@ class QueryEngine:
                 filter_conditions=filter_conditions
             )
             
-            # Enhance results with document information
+            # Enhance results with document information efficiently
             enhanced_results = []
+            doc_cache = {}
             for result in search_results:
-                # Get document information from Neo4j
-                doc_info = self.neo4j.get_document_by_id(result.get('doc_id'))
-                if doc_info:
-                    result['document'] = doc_info
-                    
-                # Get chunk context if needed
-                chunk_context = self.neo4j.get_chunk_context(result['id'], context_size=1)
-                if chunk_context:
-                    result['context'] = {
-                        'previous': [c.get('text', '') for c in chunk_context.get('previous', [])],
-                        'next': [c.get('text', '') for c in chunk_context.get('next', [])]
-                    }
+                d_id = result.get('doc_id')
+                if d_id:
+                    if d_id not in doc_cache:
+                        doc_cache[d_id] = self.neo4j.get_document_by_id(d_id)
+                    result['document'] = doc_cache[d_id]
                 
                 enhanced_results.append(result)
             
@@ -120,11 +114,26 @@ class QueryEngine:
         logger.info(f"Hybrid search: '{query}' (limit: {limit}, category: {category})")
 
         try:
-            # Step 1: vector search (fetch 2x for reranking headroom)
-            semantic_results = self.semantic_search(query, limit * 2, category)
+            import re
+            # Step 1: vector search with wider candidate pool for reranking headroom
+            candidate_limit = max(limit * 8, 40)
+            semantic_results = self.semantic_search(query, candidate_limit, category)
             if not semantic_results:
                 logger.warning("No semantic search results found")
                 return []
+
+            # Extract query tokens, statute names, and section numbers for reranking
+            q_lower = query.lower()
+            sections = re.findall(r'\b(?:section|sec\.?|article|rule)\s*(\d+[a-z]?(?:\([a-z0-9]+\))?)', q_lower)
+            statute_keywords = [
+                "biological diversity", "nagoya protocol", "patents act", "patent",
+                "trade mark", "trademark", "geographical indication", "copyright",
+                "pharmacopoeia", "jan vishwas", "tribunal", "ayush"
+            ]
+            matched_statutes = [sk for sk in statute_keywords if sk in q_lower]
+            q_words = set(w for w in re.findall(r'\b[a-z]{3,}\b', q_lower) if w not in {
+                "what", "where", "when", "which", "does", "have", "with", "from", "under", "this", "that"
+            })
 
             graph_weight = 1.0 - semantic_weight
             result_map = {}   # chunk_id -> result dict
@@ -135,6 +144,52 @@ class QueryEngine:
                 if not doc_id:
                     continue
                 seen_doc_ids.add(doc_id)
+
+                text_lower = sem.get('text', '').lower()
+                doc_dict = sem.get('document') or {}
+                title_lower = (doc_dict.get('title') or sem.get('title') or '').lower()
+                act_lower = (doc_dict.get('act_or_source_name') or sem.get('act_or_source_name') or '').lower()
+
+                # Calculate lexical & statutory relevance boost
+                boost = 0.0
+                for sk in matched_statutes:
+                    if sk in title_lower or sk in act_lower:
+                        boost += 0.25
+                        break
+
+                for sec in sections:
+                    patterns = [
+                        rf'\bsection\s+{re.escape(sec)}\b',
+                        rf'\b{re.escape(sec)}\.\s*\(',
+                        rf'\barticle\s+{re.escape(sec)}\b',
+                    ]
+                    if any(re.search(p, text_lower) for p in patterns):
+                        boost += 0.20
+                        break
+
+                text_words = set(re.findall(r'\b[a-z]{3,}\b', text_lower))
+                if q_words:
+                    overlap = len(q_words & text_words) / len(q_words)
+                    boost += overlap * 0.15
+
+                # Novelty-query boost: when query asks if something IS patentable,
+                # promote chunks about Section 3 exclusions over rights/licensing chunks.
+                _is_novelty_q = any(p in q_lower for p in (
+                    "can i patent", "patentable", "prior art", "novelty",
+                    "is it patentable", "qualify for patent", "eligible for patent",
+                    "can be patented", "cannot be patented",
+                ))
+                if _is_novelty_q:
+                    _excl_signals = (
+                        "non-patentable", "no patent shall be granted",
+                        "traditional knowledge", "section 3", "ayurvedic",
+                        "prior art", "tkdl", "not patentable",
+                    )
+                    if any(sig in text_lower for sig in _excl_signals):
+                        boost += 0.30
+
+                final_sem_score = sem['score'] * semantic_weight + boost
+
                 result_map[sem['id']] = {
                     'id': sem['id'],
                     'doc_id': doc_id,
@@ -142,8 +197,8 @@ class QueryEngine:
                     'semantic_score': sem['score'],
                     'graph_score': 0.0,
                     'concept_score': 0.0,
-                    'final_score': sem['score'] * semantic_weight,
-                    'document': sem.get('document', {}),
+                    'final_score': final_sem_score,
+                    'document': doc_dict,
                     'context': sem.get('context', {}),
                     'expansion': 'vector',
                 }
@@ -160,7 +215,6 @@ class QueryEngine:
                     rc = rel_chunks[0]
                     rc_id = rc.get('id')
                     if rc_id and rc_id not in result_map:
-                        # Use rel_weight from edge (D3); fall back to 0.5 for legacy edges
                         edge_w = float(rel_doc.get('rel_weight') or 0.5)
                         graph_score = edge_w * graph_weight
                         result_map[rc_id] = {
@@ -186,7 +240,6 @@ class QueryEngine:
             for hit in concept_hits:
                 cid = hit.get('chunk_id')
                 if cid and cid not in result_map:
-                    # Score proportional to entity overlap fraction (max overlap = 1.0)
                     overlap = float(hit.get('overlap', 1))
                     concept_score = (overlap / max(overlap, 5)) * 0.3 * graph_weight
                     result_map[cid] = {
@@ -309,7 +362,7 @@ class QueryEngine:
     def generate_answer(
         self,
         query: str,
-        limit: int = 3,
+        limit: int = 6,
         model: str = None,
         temperature: float = 0.0,
         host: str = None,
@@ -351,8 +404,8 @@ class QueryEngine:
         # Phase 7: resolve synthesis model
         if model is None:
             model = (
-                self.neo4j.config.get("llm.synthesis_model", "llama3.2:3b")
-                if hasattr(self.neo4j, "config") else "llama3.2:3b"
+                self.neo4j.config.get("llm.synthesis_model", "qwen/qwen3.8-27b")
+                if hasattr(self.neo4j, "config") else "qwen/qwen3.8-27b"
             )
         if host is None:
             host = (
@@ -361,17 +414,17 @@ class QueryEngine:
             )
 
         system_msg = (
-            "You are a read-only retrieval assistant for Ayurveda IP and regulatory law. "
-            "Your ONLY job is to extract and quote relevant information from the CONTEXT block below. "
-            "You MUST NOT use any knowledge from your training data. "
-            "You MUST NOT infer, speculate, or reason beyond what is explicitly stated in the CONTEXT. "
-            # Phase 6: confidence tagging instruction
-            "For each factual claim you state, prefix it with one of these tags:\n"
+            "You are an expert regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
+            "You MUST synthesize a grounded answer from the CONTEXT block below. "
+            "The CONTEXT contains statutory provisions, treaty text, guidelines, and regulatory documents. "
+            "Even when the context does not name the exact product/treaty in the question, "
+            "derive the applicable legal rules and requirements from related statutory provisions in the context. "
+            "For each factual claim, prefix it with one of these confidence tags:\n"
             "  [CLEAR] — directly stated in a retrieved source.\n"
-            "  [AMBIGUOUS] — present in sources but conflicting across jurisdictions or genuinely unsettled.\n"
-            "  [INFERRED] — you are inferring eligibility or applicability not explicitly stated.\n"
-            "ELIGIBLE_FOR claims (whether a formulation qualifies for IP protection) MUST always be tagged [INFERRED]. "
-            f"If the CONTEXT does not directly answer the question, respond with EXACTLY: \"{self._FALLBACK}\""
+            "  [AMBIGUOUS] — present in sources but conflicting or genuinely unsettled.\n"
+            "  [INFERRED] — you are inferring regulatory implications from related statutory text.\n"
+            "ELIGIBLE_FOR claims MUST always be tagged [INFERRED]. "
+            f"Only if the CONTEXT is completely empty or contains ZERO relevant statutory or regulatory content, respond with EXACTLY: \"{self._FALLBACK}\""
         )
         user_msg = f"CONTEXT:\n{context}\n\nQUESTION: {query}"
 
@@ -409,6 +462,10 @@ class QueryEngine:
         except Exception as exc:
             logger.warning(f"Ollama generation failed: {exc}")
             answer = f"Error generating answer via LLM: {exc}"
+
+        # If answer is fallback, don't return unrelated sources
+        if self._FALLBACK in answer or answer.strip() == self._FALLBACK:
+            sources = []
 
         # Phase 6: parse tags from answer and annotate sources
         import re as _re

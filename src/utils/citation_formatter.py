@@ -12,18 +12,22 @@ Citation examples:
 """
 
 
+import os
+
 def format_citation(metadata: dict) -> str:
     """
     Render a legal-style citation string from a chunk's metadata dict.
 
     Expected metadata keys (all optional with graceful fallback):
       act_or_source_name, section, year, jurisdiction, document_type,
-      title, category
+      title, category, path
     """
+    raw_path = metadata.get("path", "")
+    fallback_name = os.path.splitext(os.path.basename(raw_path))[0] if raw_path else "Unknown Source"
     name = (
         metadata.get("act_or_source_name")
         or metadata.get("title")
-        or "Unknown Source"
+        or fallback_name
     )
     year = metadata.get("year", "")
     section = metadata.get("section", "")
@@ -55,7 +59,13 @@ def format_source_object(chunk: dict, claim_text: str = "") -> dict:
           "tag":            str — "[CLEAR]" | "[AMBIGUOUS]" | "[INFERRED]" (default [CLEAR])
         }
     """
-    metadata = chunk.get("metadata") or {}
+    metadata = dict(chunk.get("metadata") or {})
+    doc = chunk.get("document") or {}
+    if isinstance(doc, dict):
+        for k, v in doc.items():
+            if k not in metadata and v:
+                metadata[k] = v
+
     # Also pick up flat payload fields (Qdrant result structure)
     for key in ("jurisdiction", "act_or_source_name", "year", "language",
                 "document_type", "title", "category", "section", "stage"):
