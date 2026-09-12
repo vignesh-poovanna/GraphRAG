@@ -119,58 +119,49 @@ class QdrantManager:
         
         logger.info(f"Importing {len(chunks)} chunks into Qdrant")
         
-        # Batch processing and progress tracking
-        batch_size = 100
-        points = []
+        batch_size = 64
+        total_chunks = len(chunks)
+        logger.info(f"Importing {total_chunks} chunks into Qdrant using batch size {batch_size}")
         
         try:
-            for i, chunk in enumerate(chunks):
-                # Generate embedding for the chunk text
+            for i in range(0, total_chunks, batch_size):
+                chunk_batch = chunks[i:i + batch_size]
+                texts = [c.get('text', '') for c in chunk_batch]
+                
                 try:
-                    embedding = self.embedding_model.get_embedding(chunk['text'], mode='passage')
+                    embeddings = self.embedding_model.get_batch_embeddings(
+                        texts, batch_size=batch_size, mode='passage'
+                    )
                 except Exception as e:
-                    logger.error(f"Error generating embedding for chunk {i}: {str(e)}")
+                    logger.error(f"Error generating batch embeddings at {i}: {str(e)}")
                     continue
                 
-                # Prepare point data
-                point_id = chunk['id']
+                points = []
+                for chunk, embedding in zip(chunk_batch, embeddings):
+                    point_id = chunk['id']
+                    payload = {
+                        'text': chunk['text'],
+                        'doc_id': chunk['doc_id'],
+                        'position': chunk['position'],
+                        'source_type': chunk.get('source_type', 'md'),
+                        'chunk_type': chunk.get('chunk_type', 'text'),
+                    }
+                    if 'metadata' in chunk:
+                        for key, value in chunk['metadata'].items():
+                            if key not in payload and key not in ['text', 'id']:
+                                payload[key] = value
+                    
+                    points.append(models.PointStruct(
+                        id=point_id,
+                        vector=embedding,
+                        payload=payload
+                    ))
                 
-                # Prepare payload (metadata)
-                payload = {
-                    'text': chunk['text'],
-                    'doc_id': chunk['doc_id'],
-                    'position': chunk['position'],
-                    'source_type': chunk.get('source_type', 'md'),
-                    'chunk_type': chunk.get('chunk_type', 'text'),
-                }
-                
-                # Add metadata from the document
-                if 'metadata' in chunk:
-                    for key, value in chunk['metadata'].items():
-                        if key not in payload and key not in ['text', 'id']:
-                            payload[key] = value
-                
-                # Create point
-                point = models.PointStruct(
-                    id=point_id,
-                    vector=embedding,
-                    payload=payload
-                )
-                
-                points.append(point)
-                
-                # Upload batch when reaching batch size
-                if len(points) >= batch_size:
+                if points:
                     self._upload_batch(points)
-                    logger.debug(f"Uploaded batch of {len(points)} vectors. Progress: {i+1}/{len(chunks)}")
-                    points = []
+                    logger.info(f"Qdrant vector indexing progress: {min(i + batch_size, total_chunks)}/{total_chunks} vectors uploaded")
             
-            # Upload any remaining points
-            if points:
-                self._upload_batch(points)
-                logger.debug(f"Uploaded final batch of {len(points)} vectors")
-            
-            logger.info(f"Successfully imported {len(chunks)} chunks into Qdrant")
+            logger.info(f"Successfully imported all {total_chunks} chunks into Qdrant")
             return True
         except Exception as e:
             logger.error(f"Error importing chunks to Qdrant: {str(e)}")

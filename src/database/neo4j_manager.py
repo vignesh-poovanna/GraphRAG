@@ -2,6 +2,7 @@
 Neo4j database manager for GraphRAG
 """
 
+import os
 import logging
 from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, AuthError
@@ -150,16 +151,19 @@ class Neo4jManager:
                 """)
 
                 # Manual related: frontmatter edges — tagged via='manual' (D3)
-                # Build a path→id lookup so we can resolve related filenames to doc IDs
+                # Build path and basename lookups so we can resolve related filenames to doc IDs
                 path_to_id = {doc.get('path', ''): doc['id'] for doc in documents}
+                basename_to_id = {os.path.basename(doc.get('path', '')): doc['id'] for doc in documents}
+                
                 for doc in documents:
                     related_raw = doc.get('related', [])
                     if not related_raw:
                         continue
                     if isinstance(related_raw, str):
                         related_raw = [related_raw]
-                    for rel_path in related_raw:
-                        target_id = path_to_id.get(str(rel_path))
+                    for rel_item in related_raw:
+                        rel_str = str(rel_item)
+                        target_id = path_to_id.get(rel_str) or basename_to_id.get(os.path.basename(rel_str))
                         if target_id and target_id != doc['id']:
                             session.run(
                                 """
