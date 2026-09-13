@@ -28,6 +28,7 @@ from typing import Optional
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from src.config import Config
@@ -38,6 +39,7 @@ from src.query_engine import QueryEngine
 from src.agent.orchestrator import Orchestrator
 from src.speech.session_cache import SessionCache
 from src.utils.citation_index import load_citations_index
+from src.whatsapp import router as whatsapp_router
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,7 @@ async def lifespan(app: FastAPI):
     cache = SessionCache(cfg.get("speech.session_cache", "./data/session_cache.db"))
 
     _state.update({"cfg": cfg, "qe": qe, "orch": orch, "cache": cache})
+    app.state.sakti = _state   # exposed to whatsapp router
     logger.info("API ready")
     yield
 
@@ -87,6 +90,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(whatsapp_router)
 
 # ---------------------------------------------------------------------------
 # Request / response models
@@ -265,3 +270,18 @@ async def mcp_call(req: MCPRequest):
         return {"result": data}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown tool: {req.tool}")
+
+
+# ---------------------------------------------------------------------------
+# Frontend Static Delivery
+# ---------------------------------------------------------------------------
+
+@app.get("/")
+async def serve_index():
+    return FileResponse("frontend/index.html")
+
+
+@app.get("/whatsapp_qr.png")
+async def serve_qr():
+    return FileResponse("frontend/whatsapp_qr.png")
+
