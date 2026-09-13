@@ -87,12 +87,10 @@ You will see output like this:
 Session Status                online
 Forwarding                    https://mural-rentable-outlast.ngrok-free.dev -> http://localhost:8000
 ```
-Copy the `https://...` link shown next to **Forwarding**.
 
-> 💡 **Pro-Tip (Permanent Free URL):**  
-> On your free [ngrok dashboard](https://dashboard.ngrok.com/domains), you can claim **1 free static domain** (e.g. `my-ipsakti.ngrok-free.app`). If you claim it, you can run:  
-> `ngrok http 8000 --domain=my-ipsakti.ngrok-free.app`  
-> That way, your link never changes even if you restart your computer!
+> 💡 **Your Domain is Permanent:**  
+> `mural-rentable-outlast.ngrok-free.dev` is your registered free static dev domain on ngrok.  
+> This means whenever you run `ngrok http 8000`, it will **always** use this same link, so you never have to change your Twilio webhook URL again!
 
 ---
 
