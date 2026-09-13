@@ -174,20 +174,25 @@ async def query_voice(req: VoiceQueryRequest):
 
     try:
         audio_bytes = base64.b64decode(req.audio_b64)
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        # Browser MediaRecorder produces audio/webm — write with correct extension
+        # so libsndfile/ffmpeg can auto-detect the container format.
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
             f.write(audio_bytes)
             tmp_path = f.name
 
-        audio, sr = sf.read(tmp_path)
-        os.unlink(tmp_path)
-
-        # Resample to 16 kHz if needed
-        if sr != 16000:
-            try:
-                import librosa
-                audio = librosa.resample(audio.astype(np.float32), orig_sr=sr, target_sr=16000)
-            except ImportError:
-                pass   # best-effort; whisper handles non-16k too
+        try:
+            # librosa.load handles webm/ogg/mp3/wav via soundfile+ffmpeg
+            import librosa
+            audio, _ = librosa.load(tmp_path, sr=16000, mono=True)
+        except Exception as dec_err:
+            # Final fallback: soundfile (works if it happens to be a wav)
+            import soundfile as sf
+            audio, sr = sf.read(tmp_path)
+            if sr != 16000:
+                import librosa as _lr
+                audio = _lr.resample(audio.astype(np.float32), orig_sr=sr, target_sr=16000)
+        finally:
+            os.unlink(tmp_path)
 
         pipe = SpeechPipeline(orch, cfg, session_id=sid)
         pipe._load_stt()
@@ -211,6 +216,7 @@ async def query_voice(req: VoiceQueryRequest):
     except Exception as e:
         logger.error("Voice query error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ---------------------------------------------------------------------------

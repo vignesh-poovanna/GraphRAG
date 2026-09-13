@@ -420,8 +420,10 @@ class QueryEngine:
             "- Tag each bullet with ONE confidence marker: [CLEAR] if directly stated, [INFERRED] if derived, [AMBIGUOUS] if conflicting.\n"
             "- End your answer with a blank line then: **Sources:** followed by the cited numbers and their short titles.\n"
             "- After Sources, add a blank line then: **Verdict:** followed by a direct answer (e.g. Yes / No / Conditional) and one sentence explaining the key condition or reason.\n"
+            "- After Verdict, add a blank line then: FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — exactly 3 short follow-up questions the user might naturally ask next, as a JSON array on one line.\n"
             f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self._FALLBACK}\""
         )
+
         user_msg = f"CONTEXT:\n{numbered_context}\n\nQUESTION: {query}"
 
         try:

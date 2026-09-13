@@ -113,7 +113,19 @@ class Orchestrator:
             result = self.qe.generate_answer(query, language=language)
             result["trace"] = trace + [{"step": "general_lookup", "note": "single-pass"}]
             result["mode"] = "general"
+            # Extract follow-ups the same way _synthesise does (QE may or may not emit them)
+            result.setdefault("follow_ups", [])
+            fu_match = re.search(r'FOLLOW_UPS:\s*(\[.*?\])', result.get("answer", ""), re.DOTALL)
+            if fu_match:
+                try:
+                    import json as _json
+                    fus = _json.loads(fu_match.group(1))
+                    result["follow_ups"] = [str(q).strip() for q in fus[:3]] if isinstance(fus, list) else []
+                    result["answer"] = result["answer"][:fu_match.start()].rstrip()
+                except Exception:
+                    pass
             return result
+
 
         # Final synthesis for novelty_check and precedent_lookup
         return self._synthesise(query, chunks, mode, trace, language,
