@@ -321,6 +321,7 @@ Reply with ONLY the category name, nothing else."""
             "- Tag each bullet with ONE confidence marker: [CLEAR] if directly stated, [INFERRED] if derived, [AMBIGUOUS] if conflicting.\n"
             "- End your answer with a blank line then: **Sources:** followed by the cited numbers and their short titles.\n"
             "- After Sources, add a blank line then: **Verdict:** followed by a direct answer (e.g. Yes / No / Conditional) and one sentence explaining the key condition or reason.\n"
+            "- After Verdict, add a blank line then: FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — exactly 3 short follow-up questions the user might naturally ask next, as a JSON array on one line.\n"
             "- Do NOT add analysis beyond what is grounded in the context.\n"
             f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
         )
@@ -376,15 +377,31 @@ Reply with ONLY the category name, nothing else."""
         except Exception as e:
             logger.debug("Verifier skipped: %s", e)
 
+        # Extract follow-up questions emitted inline by the LLM
+        follow_ups = []
+        fu_match = _re.search(r'FOLLOW_UPS:\s*(\[.*?\])', answer, _re.DOTALL)
+        if fu_match:
+            try:
+                import json as _json
+                follow_ups = _json.loads(fu_match.group(1))
+                if not isinstance(follow_ups, list):
+                    follow_ups = []
+                follow_ups = [str(q).strip() for q in follow_ups[:3]]
+            except Exception:
+                follow_ups = []
+            # Strip the FOLLOW_UPS line from the visible answer
+            answer = answer[:fu_match.start()].rstrip()
+
         trace.append({"step": "synthesis", "chunks_used": len(chunks), "tags": tags_found})
 
         return {
-            "answer":   answer,
-            "sources":  sources,
-            "trace":    trace,
-            "mode":     mode,
-            "language": language,
-            "tags":     tags_found,
+            "answer":     answer,
+            "sources":    sources,
+            "trace":      trace,
+            "mode":       mode,
+            "language":   language,
+            "tags":       tags_found,
+            "follow_ups": follow_ups,
         }
 
 

@@ -596,6 +596,77 @@
       height: 11px;
     }
 
+    /* ── Voice Waveform ───────────────────────────────────────── */
+    #voiceWaveWrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 0 6px;
+    }
+    #voiceWaveWrap.active { display: flex; }
+    #voiceLabel {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--accent-dark);
+    }
+    #voiceLabel.speaking { color: #7c3aed; }
+    #waveCanvas {
+      width: 100%;
+      max-width: 360px;
+      height: 56px;
+      border-radius: 12px;
+      background: var(--bg-soft);
+    }
+    .speak-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: transparent;
+      border: 1.5px solid var(--accent);
+      color: var(--accent-dark);
+      padding: 5px 13px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .15s;
+    }
+    .speak-btn:hover { background: var(--accent-soft); }
+    .speak-btn.speaking {
+      background: #ede9fe;
+      border-color: #7c3aed;
+      color: #5b21b6;
+    }
+    .speak-btn svg { width: 13px; height: 13px; }
+    /* ── Follow-up chips ────────────────────────────────────── */
+    .followups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .chip {
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      font-family: inherit;
+    }
+    .chip:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+    }
+
     .eyebrow {
       font-size: 11.5px;
       font-weight: 700;
@@ -1015,6 +1086,11 @@
           <p>Type below or <a href="#" id="tryVoice">use voice input</a> — answers arrive with the source attached.</p>
         </div>
         <div class="messages" id="messages"></div>
+        <!-- Voice waveform visualizer (shown during mic & TTS) -->
+        <div id="voiceWaveWrap">
+          <span id="voiceLabel"></span>
+          <canvas id="waveCanvas"></canvas>
+        </div>
       </div>
 
       <div class="eyebrow">ASK IP-SAKTI</div>
@@ -1099,7 +1175,170 @@
     const modeVoice = document.getElementById('modeVoice');
     let totalCites = 0;
 
-    /* ── Sample questions (wand button) ────────────────────────── */
+    /* ── Voice Waveform (Web Audio API) ──────────────────────── */
+    let audioCtx = null, analyser = null, waveRaf = null, micStream = null;
+    const waveWrap = document.getElementById('voiceWaveWrap');
+    const waveLbl  = document.getElementById('voiceLabel');
+    const canvas   = document.getElementById('waveCanvas');
+    const ctx2d    = canvas ? canvas.getContext('2d') : null;
+
+    function startWaveViz(stream, labelText, color) {
+      if (!canvas) return;
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (analyser) { analyser.disconnect(); }
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      const src = audioCtx.createMediaStreamSource(stream);
+      src.connect(analyser);
+      waveWrap.classList.add('active');
+      waveLbl.textContent = labelText;
+      waveLbl.className = color === 'purple' ? 'speaking' : '';
+      canvas.width = canvas.offsetWidth * (window.devicePixelRatio || 1);
+      canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const W = canvas.width, H = canvas.height;
+      function draw() {
+        waveRaf = requestAnimationFrame(draw);
+        analyser.getByteTimeDomainData(data);
+        ctx2d.clearRect(0, 0, W, H);
+        ctx2d.lineWidth = 2.5;
+        ctx2d.strokeStyle = color === 'purple' ? '#7c3aed' : '#12B387';
+        ctx2d.beginPath();
+        const step = W / data.length;
+        data.forEach((v, i) => {
+          const y = (v / 128 - 1) * (H / 2) + H / 2;
+          i === 0 ? ctx2d.moveTo(0, y) : ctx2d.lineTo(i * step, y);
+        });
+        ctx2d.stroke();
+      }
+      draw();
+    }
+
+    function stopWaveViz() {
+      if (waveRaf) { cancelAnimationFrame(waveRaf); waveRaf = null; }
+      waveWrap.classList.remove('active');
+      if (ctx2d && canvas) ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    /* ── TTS playback (prefer server Kokoro; fallback to Web Speech) ── */
+    let currentAudio = null;  // HTMLAudioElement for Kokoro
+    let ttsUtterance = null;  // SpeechSynthesisUtterance for fallback
+    let ttsStream = null;     // fake MediaStream for waveform during TTS
+
+    function stopTTS() {
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      stopWaveViz();
+      document.querySelectorAll('.speak-btn').forEach(b => {
+        b.classList.remove('speaking');
+        b.innerHTML = speakIcon() + 'Read aloud';
+      });
+    }
+
+    function speakIcon() {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+    }
+    function stopIcon() {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+    }
+
+    async function speakText(text, btn) {
+      // Barge-in: stop any current TTS first
+      stopTTS();
+
+      btn.classList.add('speaking');
+      btn.innerHTML = stopIcon() + 'Stop';
+      btn.onclick = () => { stopTTS(); };
+
+      // Try server Kokoro /tts first
+      try {
+        const res = await fetch(`${API}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text.replace(/<[^>]+>/g, '').slice(0, 800) }),
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          currentAudio = new Audio(url);
+          // Wire waveform via AudioContext + MediaElementSource
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (analyser) analyser.disconnect();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 512;
+          const src = audioCtx.createMediaElementSource(currentAudio);
+          src.connect(analyser);
+          analyser.connect(audioCtx.destination);
+          waveWrap.classList.add('active');
+          waveLbl.textContent = '🔊 Speaking…';
+          waveLbl.className = 'speaking';
+          canvas.width = canvas.offsetWidth * (window.devicePixelRatio || 1);
+          canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          const W = canvas.width, H = canvas.height;
+          function drawAudio() {
+            waveRaf = requestAnimationFrame(drawAudio);
+            analyser.getByteTimeDomainData(data);
+            ctx2d.clearRect(0, 0, W, H);
+            ctx2d.lineWidth = 2.5;
+            ctx2d.strokeStyle = '#7c3aed';
+            ctx2d.beginPath();
+            const step = W / data.length;
+            data.forEach((v, i) => {
+              const y = (v / 128 - 1) * (H / 2) + H / 2;
+              i === 0 ? ctx2d.moveTo(0, y) : ctx2d.lineTo(i * step, y);
+            });
+            ctx2d.stroke();
+          }
+          drawAudio();
+          currentAudio.play();
+          currentAudio.onended = () => {
+            stopWaveViz();
+            btn.classList.remove('speaking');
+            btn.innerHTML = speakIcon() + 'Read aloud';
+            btn.onclick = () => speakText(text, btn);
+          };
+          return;
+        }
+      } catch (_) { /* fall through to Web Speech */ }
+
+      // Fallback: Web Speech API
+      if (!window.speechSynthesis) { stopTTS(); return; }
+      const plain = text.replace(/<[^>]+>/g, '').slice(0, 1000);
+      ttsUtterance = new SpeechSynthesisUtterance(plain);
+      ttsUtterance.rate = 1.05;
+      ttsUtterance.onend = () => {
+        stopWaveViz();
+        btn.classList.remove('speaking');
+        btn.innerHTML = speakIcon() + 'Read aloud';
+        btn.onclick = () => speakText(text, btn);
+      };
+      // Waveform animation while Web Speech plays (pulse-only, no real stream)
+      waveWrap.classList.add('active');
+      waveLbl.textContent = '🔊 Speaking…';
+      waveLbl.className = 'speaking';
+      let t = 0;
+      function fakePulse() {
+        waveRaf = requestAnimationFrame(fakePulse);
+        if (!canvas) return;
+        const W = canvas.width || canvas.offsetWidth;
+        const H = canvas.height || canvas.offsetHeight;
+        ctx2d.clearRect(0, 0, W, H);
+        ctx2d.lineWidth = 2.5;
+        ctx2d.strokeStyle = '#7c3aed';
+        ctx2d.beginPath();
+        for (let i = 0; i <= W; i++) {
+          const y = H / 2 + Math.sin((i / W) * 6 * Math.PI + t) * (H / 4) * (0.4 + 0.6 * Math.abs(Math.sin(t * 0.3)));
+          i === 0 ? ctx2d.moveTo(i, y) : ctx2d.lineTo(i, y);
+        }
+        ctx2d.stroke();
+        t += 0.08;
+      }
+      fakePulse();
+      window.speechSynthesis.speak(ttsUtterance);
+    }
+
+    /* ── Sample questions (wand button) ─────────────────────── */
     const SAMPLES = [
       'Can I patent a triphala-based formulation in India?',
       'What does Section 3(p) of the Patents Act say about traditional knowledge?',
@@ -1114,13 +1353,13 @@
       input.focus();
     });
 
-    /* ── Helpers ────────────────────────────────────────────────── */
+    /* ── Helpers ─────────────────────────────────────────────── */
     function showMessages() {
       chatEmpty.style.display = 'none';
       messagesEl.classList.add('show');
     }
 
-    function addMsg(role, html, citations) {
+    function addMsg(role, html, citations, followUps, rawText) {
       showMessages();
       const isBot = role === 'bot';
       const d = document.createElement('div');
@@ -1128,10 +1367,26 @@
       const citHtml = (citations && citations.length)
         ? citations.map(c => `<div class="citation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>${c}</div>`).join('')
         : '';
-      d.innerHTML = `<div class="msg-avatar">${isBot ? 'AI' : 'You'}</div><div class="msg-bubble">${html}${citHtml}</div>`;
+      const speakHtml = isBot
+        ? `<div style="margin-top:10px"><button class="speak-btn" id="spk-${Date.now()}">${speakIcon()} Read aloud</button></div>`
+        : '';
+      const fuHtml = (isBot && followUps && followUps.length)
+        ? `<div class="followups">${followUps.map(q => `<button class="chip" onclick="useChip(this)">${q}</button>`).join('')}</div>`
+        : '';
+      d.innerHTML = `<div class="msg-avatar">${isBot ? 'AI' : 'You'}</div><div class="msg-bubble">${html}${citHtml}${speakHtml}${fuHtml}</div>`;
       messagesEl.appendChild(d);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (isBot && rawText) {
+        const spkBtn = d.querySelector('.speak-btn');
+        if (spkBtn) spkBtn.addEventListener('click', () => speakText(rawText, spkBtn));
+      }
       return d;
+    }
+
+    function useChip(btn) {
+      input.value = btn.textContent;
+      input.focus();
+      sendMessage();
     }
 
     function addTyping() {
@@ -1152,10 +1407,11 @@
         .replace(/\n/g, '<br>');
     }
 
-    /* ── Send text query ────────────────────────────────────────── */
+    /* ── Send text query ──────────────────────────────────────── */
     async function sendMessage() {
       const val = input.value.trim();
       if (!val) return;
+      stopTTS(); // barge-in: stop any playing TTS
       addMsg('user', val.replace(/</g, '&lt;'));
       input.value = '';
       addTyping();
@@ -1175,10 +1431,11 @@
           .filter(Boolean);
         totalCites += cites.length;
         citeCount.textContent = totalCites + (totalCites === 1 ? ' source cited' : ' sources cited');
-        addMsg('bot', formatAnswer(data.answer || 'No answer returned.'), cites);
+        const rawText = data.answer || '';
+        addMsg('bot', formatAnswer(rawText), cites, data.follow_ups || [], rawText);
       } catch {
         removeTyping();
-        addMsg('bot', '⚠ API server not reachable. Start it with:<br><code>uvicorn src.api:app --port 8000</code>');
+        addMsg('bot', '&#9888; API server not reachable. Start it with:<br><code>uvicorn src.api:app --port 8000</code>');
       }
     }
 
@@ -1186,11 +1443,13 @@
     document.getElementById('askBtn').addEventListener('click', sendMessage);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
 
-    /* ── Mic / voice recording ──────────────────────────────────── */
+    /* ── Mic / voice recording ────────────────────────────────── */
     micBtn.addEventListener('click', async () => {
       if (!recording) {
         try {
+          stopTTS(); // barge-in: stop TTS if mic is clicked
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStream = stream;
           mediaRecorder = new MediaRecorder(stream);
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -1200,13 +1459,17 @@
           micBtn.classList.add('recording');
           input.placeholder = 'Recording… click mic again to stop.';
           modeVoice.classList.add('active'); modeText.classList.remove('active');
+          // Live waveform
+          startWaveViz(stream, '🎙 Listening…', 'green');
         } catch { alert('Microphone permission denied.'); }
       } else {
         mediaRecorder.stop();
+        micStream && micStream.getTracks().forEach(t => t.stop());
         recording = false;
         micBtn.classList.remove('recording');
         input.placeholder = 'e.g. Can I patent this triphala formulation?';
         modeText.classList.add('active'); modeVoice.classList.remove('active');
+        stopWaveViz();
       }
     });
 
@@ -1229,29 +1492,30 @@
           const cites = (data.sources || []).slice(0, 3).map(s => s.citation || s.act_or_source_name).filter(Boolean);
           totalCites += cites.length;
           citeCount.textContent = totalCites + ' sources cited';
-          addMsg('bot', formatAnswer(data.answer || ''), cites);
+          const rawText = data.answer || '';
+          addMsg('bot', formatAnswer(rawText), cites, data.follow_ups || [], rawText);
         } catch {
           removeTyping();
-          addMsg('bot', '⚠ Voice query failed. Check API server.');
+          addMsg('bot', '&#9888; Voice query failed. Check API server.');
         }
       };
       reader.readAsDataURL(blob);
     }
 
-    /* ── Mode toggle ────────────────────────────────────────────── */
+    /* ── Mode toggle ─────────────────────────────────────────── */
     modeVoice.addEventListener('click', () => { modeVoice.classList.add('active'); modeText.classList.remove('active'); });
     modeText.addEventListener('click', () => { modeText.classList.add('active'); modeVoice.classList.remove('active'); });
 
-    /* ── Try Voice link ─────────────────────────────────────────── */
+    /* ── Try Voice link ──────────────────────────────────────── */
     document.getElementById('tryVoice')?.addEventListener('click', e => { e.preventDefault(); micBtn.click(); });
 
-    /* ── Live doc count ─────────────────────────────────────────── */
+    /* ── Live doc count ──────────────────────────────────────── */
     fetch(`${API}/stats`).then(r => r.json()).then(d => {
       const el = document.getElementById('docCount');
       if (el && d.total_documents) el.textContent = d.total_documents;
     }).catch(() => { });
 
-    /* ── WhatsApp Modal Handlers ──────────────────────────────────── */
+    /* ── WhatsApp Modal ──────────────────────────────────────── */
     function openWaModal() {
       const m = document.getElementById('waModal');
       if (m) m.classList.add('open');

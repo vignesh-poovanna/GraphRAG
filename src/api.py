@@ -116,6 +116,7 @@ class QueryResponse(BaseModel):
     sources: list[dict]
     trace: list[dict]
     session_id: str
+    follow_ups: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +149,7 @@ async def query(req: QueryRequest):
         sources=result.get("sources", []),
         trace=result.get("trace", []),
         session_id=sid,
+        follow_ups=result.get("follow_ups", []),
     )
 
 
@@ -202,6 +204,7 @@ async def query_voice(req: VoiceQueryRequest):
             sources=result.get("sources", []),
             trace=result.get("trace", []),
             session_id=sid,
+            follow_ups=result.get("follow_ups", []),
         )
     except HTTPException:
         raise
@@ -270,6 +273,55 @@ async def mcp_call(req: MCPRequest):
         return {"result": data}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown tool: {req.tool}")
+
+
+# ---------------------------------------------------------------------------
+# TTS endpoint — server-side Kokoro voice synthesis
+# ---------------------------------------------------------------------------
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "af_heart"
+    speed: float = 1.0
+
+
+_tts_instance = None  # lazy-loaded once
+
+
+@app.post("/tts")
+async def tts(req: TTSRequest):
+    """
+    Synthesise text with Kokoro-ONNX and stream back WAV audio.
+    Falls back gracefully if kokoro_onnx is not installed.
+    """
+    global _tts_instance
+    try:
+        import io
+        import soundfile as sf
+        from kokoro_onnx import Kokoro
+
+        if _tts_instance is None:
+            _tts_instance = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
+
+        samples, sample_rate = _tts_instance.create(
+            req.text[:800],   # hard cap to avoid huge payloads
+            voice=req.voice,
+            speed=req.speed,
+            lang="en-us",
+        )
+
+        buf = io.BytesIO()
+        sf.write(buf, samples, sample_rate, format="WAV")
+        buf.seek(0)
+
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="audio/wav")
+
+    except ImportError:
+        raise HTTPException(status_code=503, detail="kokoro_onnx not installed on this server")
+    except Exception as e:
+        logger.error("TTS error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
