@@ -101,11 +101,13 @@ class QueryRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
     limit: int = 5
+    history: list[dict] = []   # [{role, content}, ...] last 3 turns from client
 
 
 class VoiceQueryRequest(BaseModel):
     audio_b64: str          # base64-encoded WAV/MP3 bytes
     session_id: Optional[str] = None
+    history: list[dict] = []   # [{role, content}, ...] last 3 turns from client
 
 
 class QueryResponse(BaseModel):
@@ -139,7 +141,7 @@ async def query(req: QueryRequest):
     # but here we call orchestrator directly (voice pipeline handles its own)
     from src.speech.pipeline import SpeechPipeline
     pipe = SpeechPipeline(orch, _state["cfg"], session_id=sid)
-    result = pipe.query(req.query)
+    result = pipe.query(req.query, client_history=req.history)
 
     return QueryResponse(
         answer=result.get("answer", ""),
@@ -174,25 +176,20 @@ async def query_voice(req: VoiceQueryRequest):
 
     try:
         audio_bytes = base64.b64decode(req.audio_b64)
-        # Browser MediaRecorder produces audio/webm — write with correct extension
-        # so libsndfile/ffmpeg can auto-detect the container format.
-        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+        # Client sends 16 kHz mono PCM WAV (converted from webm by Web Audio API)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(audio_bytes)
             tmp_path = f.name
 
         try:
-            # librosa.load handles webm/ogg/mp3/wav via soundfile+ffmpeg
-            import librosa
-            audio, _ = librosa.load(tmp_path, sr=16000, mono=True)
-        except Exception as dec_err:
-            # Final fallback: soundfile (works if it happens to be a wav)
-            import soundfile as sf
             audio, sr = sf.read(tmp_path)
-            if sr != 16000:
-                import librosa as _lr
-                audio = _lr.resample(audio.astype(np.float32), orig_sr=sr, target_sr=16000)
         finally:
             os.unlink(tmp_path)
+
+        # Resample only if needed (client targets 16 kHz, but guard anyway)
+        if sr != 16000:
+            import librosa
+            audio = librosa.resample(audio.astype(np.float32), orig_sr=sr, target_sr=16000)
 
         pipe = SpeechPipeline(orch, cfg, session_id=sid)
         pipe._load_stt()
@@ -200,7 +197,7 @@ async def query_voice(req: VoiceQueryRequest):
         if not text:
             raise HTTPException(status_code=422, detail="Could not transcribe audio")
 
-        result = pipe.query(text)
+        result = pipe.query(text, client_history=req.history)
         return QueryResponse(
             answer=result.get("answer", ""),
             mode=result.get("mode", "general"),

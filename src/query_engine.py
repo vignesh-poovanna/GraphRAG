@@ -367,6 +367,7 @@ class QueryEngine:
         temperature: float = 0.0,
         host: str = None,
         language: str = "en",
+        session_context: list = None,   # [{role, content}, ...] last 3 turns
     ) -> dict:
         """
         Perform hybrid retrieval and generate a strictly grounded answer.
@@ -410,7 +411,15 @@ class QueryEngine:
                 if hasattr(self.neo4j, "config") else "http://localhost:11434"
             )
 
+        lang_instruction = (
+            "Respond in Hindi (Devanagari script). "
+            if language == "hi" else
+            "Respond in the same language as the question. "
+            if language not in ("en", "") else ""
+        )
+
         system_msg = (
+            f"{lang_instruction}"
             "You are a concise regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
             "Rules:\n"
@@ -424,7 +433,15 @@ class QueryEngine:
             f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self._FALLBACK}\""
         )
 
+        # Build messages: history (if any) + system + user
         user_msg = f"CONTEXT:\n{numbered_context}\n\nQUESTION: {query}"
+        messages = []
+        if session_context:
+            messages.extend(session_context[-3:])  # cap at 3 turns
+        messages += [
+            {"role": "system", "content": system_msg},
+            {"role": "user",   "content": user_msg},
+        ]
 
         try:
             api_key = self.neo4j.config.get("llm.synthesis_api_key", "") if hasattr(self.neo4j, "config") else ""
@@ -436,10 +453,7 @@ class QueryEngine:
                 client = OpenAI(api_key=api_key, base_url=base_url)
                 resp = client.chat.completions.create(
                     model=model,
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user",   "content": user_msg},
-                    ],
+                    messages=messages,
                     temperature=temperature,
                     max_tokens=600,
                 )
@@ -450,10 +464,7 @@ class QueryEngine:
                 client = ollama.Client(host=host)
                 response = client.chat(
                     model=model,
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user",   "content": user_msg},
-                    ],
+                    messages=messages,
                     options={"temperature": temperature, "num_predict": 768},
                 )
                 answer = response["message"]["content"].strip()

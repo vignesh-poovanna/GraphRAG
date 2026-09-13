@@ -1166,6 +1166,19 @@
     let mediaRecorder = null;
     let audioChunks = [];
 
+    // Chat history — last 3 Q&A pairs, stored in sessionStorage (cleared on tab refresh)
+    const HISTORY_KEY = 'ipsakti_history';
+    function getHistory() {
+      try { return JSON.parse(sessionStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+    }
+    function pushHistory(userText, botText) {
+      const h = getHistory();
+      h.push({ role: 'user', content: userText });
+      h.push({ role: 'assistant', content: botText });
+      // Keep only last 3 pairs = 6 messages
+      sessionStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(-6)));
+    }
+
     const input = document.getElementById('questionInput');
     const messagesEl = document.getElementById('messages');
     const chatEmpty = document.getElementById('chatEmpty');
@@ -1420,7 +1433,7 @@
         const res = await fetch(`${API}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: val, session_id: sessionId }),
+          body: JSON.stringify({ query: val, session_id: sessionId, history: getHistory() }),
         });
         const data = await res.json();
         sessionId = data.session_id;
@@ -1432,6 +1445,7 @@
         totalCites += cites.length;
         citeCount.textContent = totalCites + (totalCites === 1 ? ' source cited' : ' sources cited');
         const rawText = data.answer || '';
+        pushHistory(val, rawText);
         addMsg('bot', formatAnswer(rawText), cites, data.follow_ups || [], rawText);
       } catch {
         removeTyping();
@@ -1473,33 +1487,65 @@
       }
     });
 
+    /* Convert any recorded audio blob to 16-bit PCM WAV at 16 kHz (client-side) */
+    async function blobToWavB64(blob) {
+      const arrayBuf = await blob.arrayBuffer();
+      // Decode whatever the browser produced (webm/ogg/etc.)
+      const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const decoded = await tmpCtx.decodeAudioData(arrayBuf);
+      tmpCtx.close();
+      // Resample to 16 kHz mono
+      const SR = 16000;
+      const offCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * SR), SR);
+      const src = offCtx.createBufferSource();
+      src.buffer = decoded;
+      src.connect(offCtx.destination);
+      src.start(0);
+      const rendered = await offCtx.startRendering();
+      const samples = rendered.getChannelData(0);
+      // Float32 → Int16
+      const pcm = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++)
+        pcm[i] = Math.max(-32768, Math.min(32767, Math.round(samples[i] * 32767)));
+      // Build WAV header
+      const wav = new ArrayBuffer(44 + pcm.byteLength);
+      const v = new DataView(wav);
+      const str = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+      str(0, 'RIFF'); v.setUint32(4, 36 + pcm.byteLength, true); str(8, 'WAVE');
+      str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, SR, true); v.setUint32(28, SR * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      str(36, 'data'); v.setUint32(40, pcm.byteLength, true);
+      new Int16Array(wav, 44).set(pcm);
+      // Base64 encode
+      const bytes = new Uint8Array(wav);
+      let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    }
+
     async function sendVoice() {
       const blob = new Blob(audioChunks, { type: 'audio/webm' });
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const b64 = reader.result.split(',')[1];
-        addMsg('user', '🎙 <em>Voice message…</em>');
-        addTyping();
-        try {
-          const res = await fetch(`${API}/query/voice`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audio_b64: b64, session_id: sessionId }),
-          });
-          const data = await res.json();
-          sessionId = data.session_id;
-          removeTyping();
-          const cites = (data.sources || []).slice(0, 3).map(s => s.citation || s.act_or_source_name).filter(Boolean);
-          totalCites += cites.length;
-          citeCount.textContent = totalCites + ' sources cited';
-          const rawText = data.answer || '';
-          addMsg('bot', formatAnswer(rawText), cites, data.follow_ups || [], rawText);
-        } catch {
-          removeTyping();
-          addMsg('bot', '&#9888; Voice query failed. Check API server.');
-        }
-      };
-      reader.readAsDataURL(blob);
+      addMsg('user', '🎙 <em>Voice message…</em>');
+      addTyping();
+      try {
+        const b64 = await blobToWavB64(blob);
+        const res = await fetch(`${API}/query/voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_b64: b64, session_id: sessionId, history: getHistory() }),
+        });
+        const data = await res.json();
+        sessionId = data.session_id;
+        removeTyping();
+        const cites = (data.sources || []).slice(0, 3).map(s => s.citation || s.act_or_source_name).filter(Boolean);
+        totalCites += cites.length;
+        citeCount.textContent = totalCites + ' sources cited';
+        const rawText = data.answer || '';
+        pushHistory('🎙 Voice query', rawText);
+        addMsg('bot', formatAnswer(rawText), cites, data.follow_ups || [], rawText);
+      } catch (err) {
+        removeTyping();
+        addMsg('bot', '&#9888; Voice query failed: ' + (err.message || 'Check API server.'));
+      }
     }
 
     /* ── Mode toggle ─────────────────────────────────────────── */

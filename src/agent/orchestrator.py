@@ -110,7 +110,7 @@ class Orchestrator:
             return self._procedural(query, trace, language)
         else:
             # general: delegate entirely to query_engine.generate_answer
-            result = self.qe.generate_answer(query, language=language)
+            result = self.qe.generate_answer(query, language=language, session_context=session_context)
             result["trace"] = trace + [{"step": "general_lookup", "note": "single-pass"}]
             result["mode"] = "general"
             # Extract follow-ups the same way _synthesise does (QE may or may not emit them)
@@ -323,7 +323,14 @@ Reply with ONLY the category name, nothing else."""
             f"[{i+1}] {c['text']}" for i, c in enumerate(used_chunks)
         )
 
+        lang_instruction = (
+            "Respond in Hindi (Devanagari script). "
+            if language == "hi" else
+            "Respond in the same language as the question. "
+            if language not in ("en", "") else ""
+        )
         system_msg = (
+            f"{lang_instruction}"
             "You are a concise regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
             "Rules:\n"

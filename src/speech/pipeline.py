@@ -107,12 +107,17 @@ class SpeechPipeline:
         except KeyboardInterrupt:
             print("\n👋  Voice session ended.")
 
-    def query(self, text: str) -> dict:
+    def query(self, text: str, client_history: list = None) -> dict:
         """
         Non-voice entry point: accepts text directly and returns result dict.
-        Used by the FastAPI backend (Phase 9) and tests.
+        client_history: last 3 turns from the browser's sessionStorage
+                        [{role, content}, ...] — cleared on page refresh.
         """
-        history = self.cache.get_history(self.session, last_n=4)
+        # Prefer client-supplied history (fresher, capped at 3); fall back to DB
+        if client_history:
+            history = client_history[-3:]
+        else:
+            history = self.cache.get_history(self.session, last_n=3)
         translated, lang = self._maybe_translate(text)
         self.cache.add_turn(self.session, "user", text)
 
