@@ -225,9 +225,9 @@ Reply with ONLY the category name, nothing else."""
                     "expansion": "graph:precedent",
                 })
 
-        # 2. Vector search against case_law category
-        vec_results = self.qe.hybrid_search(query, limit=5, category="ip/case_law")
-        trace.append({"step": "retrieval", "category": "ip/case_law", "chunks_found": len(vec_results)})
+        # 2. Vector search across relevant corpus chunks
+        vec_results = self.qe.hybrid_search(query, limit=8)
+        trace.append({"step": "retrieval", "chunks_found": len(vec_results)})
 
         return graph_chunks + vec_results
 
