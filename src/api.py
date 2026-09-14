@@ -29,6 +29,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.config import Config
@@ -92,6 +93,9 @@ app.add_middleware(
 )
 
 app.include_router(whatsapp_router)
+
+# Serve frontend static files (SVGs, images, etc.)
+app.mount("/static", StaticFiles(directory="frontend"), name="frontend")
 
 # ---------------------------------------------------------------------------
 # Request / response models

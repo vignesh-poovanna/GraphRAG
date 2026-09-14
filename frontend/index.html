@@ -951,7 +951,7 @@
       </div>
     </div>
     <nav>
-      <a href="#">
+      <a href="#" onclick="openDashModal();return false;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
           stroke-linejoin="round">
           <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -961,7 +961,7 @@
         </svg>
         Dashboard
       </a>
-      <a href="#" class="btn-ghost">Sources</a>
+      <a href="#" class="btn-ghost" onclick="openSourcesModal();return false;">Sources</a>
       <button id="whatsappNavBtn" class="btn-whatsapp" onclick="openWaModal()">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 00-3.48-8.413Z"/>
@@ -1561,14 +1561,51 @@
       if (el && d.total_documents) el.textContent = d.total_documents;
     }).catch(() => { });
 
-    /* ── WhatsApp Modal ──────────────────────────────────────── */
-    function openWaModal() {
-      const m = document.getElementById('waModal');
-      if (m) m.classList.add('open');
+    /* ── Dashboard Modal (B & C as SVG graphs) ─────────────────── */
+    let dashActive = 0;
+
+    function renderDash() {
+      document.querySelectorAll('.dash-tab').forEach((t, i) =>
+        t.classList.toggle('active', i === dashActive));
+      document.querySelectorAll('.dash-panel').forEach((p, i) =>
+        p.classList.toggle('hidden', i !== dashActive));
     }
-    function closeWaModal() {
-      const m = document.getElementById('waModal');
-      if (m) m.classList.remove('open');
+
+    function openDashModal() {
+      document.getElementById('dashModal').classList.add('open');
+      renderDash();
+    }
+    function closeDashModal() {
+      document.getElementById('dashModal').classList.remove('open');
+    }
+    function selectDashTab(i) {
+      dashActive = i;
+      renderDash();
+    }
+
+    /* ── Sources Modal ───────────────────────────────────────────── */
+    const SOURCES_DATA = [
+      { Domain: "Ayurveda & Traditional Knowledge",        DocumentCount: 9, ChunkCount: 6959 },
+      { Domain: "Patent Law & Examination",                DocumentCount: 8, ChunkCount: 1457 },
+      { Domain: "Trademarks & Geographical Indications",   DocumentCount: 4, ChunkCount: 1273 },
+      { Domain: "National & International IP Policy",      DocumentCount: 5, ChunkCount:  716 },
+      { Domain: "Copyrights & Digital Media",              DocumentCount: 3, ChunkCount:  663 },
+      { Domain: "Biodiversity & Access-Benefit Sharing",   DocumentCount: 3, ChunkCount:  382 },
+      { Domain: "New Docs",                                DocumentCount: 2, ChunkCount:   84 },
+    ];
+
+    function openSourcesModal() {
+      const tbody = document.getElementById('srcTbody');
+      tbody.innerHTML = SOURCES_DATA.map(r => `
+        <tr>
+          <td>${r.Domain}</td>
+          <td style="text-align:center">${r.DocumentCount}</td>
+          <td style="text-align:center">${r.ChunkCount.toLocaleString()}</td>
+        </tr>`).join('');
+      document.getElementById('srcModal').classList.add('open');
+    }
+    function closeSourcesModal() {
+      document.getElementById('srcModal').classList.remove('open');
     }
   </script>
 
@@ -1600,6 +1637,111 @@
     </div>
   </div>
 
+
+  <!-- Dashboard Modal (B & C SVG graphs) + Sources Modal -->
+  <style>
+    /* shared overlay */
+    .dash-overlay, .src-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); backdrop-filter: blur(6px);
+      z-index: 1100; align-items: center; justify-content: center;
+    }
+    .dash-overlay.open, .src-overlay.open { display: flex; }
+
+    /* dashboard card — light mode, wide for graphs */
+    .dash-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px; padding: 24px 24px 20px;
+      width: min(900px, 96vw); max-height: 90vh;
+      display: flex; flex-direction: column;
+      position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.18);
+    }
+    .dash-close, .src-close {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; font-size: 22px; cursor: pointer;
+      color: #94a3b8; line-height: 1;
+    }
+    .dash-close:hover, .src-close:hover { color: #1e293b; }
+    .dash-header { margin-bottom: 14px; }
+    .dash-header h2 {
+      margin: 0; font-size: 17px; font-weight: 800;
+      font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b;
+    }
+    .dash-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .dash-tab {
+      padding: 6px 20px; border-radius: 999px;
+      border: 1px solid #cbd5e1; background: transparent;
+      color: #64748b; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .18s;
+    }
+    .dash-tab:hover { border-color: #7c5cfc; color: #7c5cfc; }
+    .dash-tab.active { background: #7c5cfc; border-color: transparent; color: #fff; }
+    .dash-panel { flex: 1; overflow: auto; border-radius: 12px; background: #f8fafc; padding: 8px; }
+    .dash-panel.hidden { display: none; }
+    .dash-panel img {
+      width: 100%; height: auto; display: block; border-radius: 8px;
+    }
+    .dash-panel-desc {
+      font-size: 12px; color: #64748b;
+      margin: 10px 0 0; text-align: center;
+    }
+
+    /* sources card — light mode */
+    .src-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px; padding: 28px 28px 24px;
+      width: min(640px, 94vw); max-height: 88vh; overflow-y: auto;
+      position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.18);
+    }
+    .src-card h2 {
+      margin: 0 0 18px; font-size: 18px; font-weight: 800;
+      font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b;
+    }
+    .src-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .src-table th {
+      text-align: left; padding: 8px 12px;
+      border-bottom: 2px solid #e2e8f0;
+      color: #64748b; font-weight: 700; font-size: 12px;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .src-table td { padding: 11px 12px; color: #1e293b; }
+    .src-table tr:not(:last-child) td { border-bottom: 1px solid #f1f5f9; }
+    .src-table tr:hover td { background: #f8fafc; }
+  </style>
+
+  <div id="dashModal" class="dash-overlay" onclick="if(event.target===this)closeDashModal()">
+    <div class="dash-card">
+      <button class="dash-close" onclick="closeDashModal()" aria-label="Close">&times;</button>
+      <div class="dash-header"><h2>Graph Explorer</h2></div>
+      <div class="dash-tabs">
+        <button class="dash-tab" onclick="selectDashTab(0)">B &mdash; Cross-Act Dependencies</button>
+        <button class="dash-tab" onclick="selectDashTab(1)">C &mdash; Sequential Chunk Flow</button>
+      </div>
+      <div class="dash-panel" id="dashPanel0">
+        <img src="/static/b.svg" alt="Cross-Act Legal Dependencies graph" />
+        <p class="dash-panel-desc">Direct cross-act statutory links (via: manual) — Biodiversity Act, Nagoya Protocol, Patents Act, Biotech Guidelines</p>
+      </div>
+      <div class="dash-panel hidden" id="dashPanel1">
+        <img src="/static/c.svg" alt="Act and sequential chunk flow graph" />
+        <p class="dash-panel-desc">The Biological Diversity Act, 2002 — document hub with first 20 chunks in [:NEXT] reading order</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="srcModal" class="src-overlay" onclick="if(event.target===this)closeSourcesModal()">
+    <div class="src-card">
+      <button class="src-close" onclick="closeSourcesModal()" aria-label="Close">&times;</button>
+      <h2>Sources &mdash; Document Coverage</h2>
+      <table class="src-table">
+        <thead>
+          <tr><th>Domain</th><th style="text-align:center">Documents</th><th style="text-align:center">Chunks</th></tr>
+        </thead>
+        <tbody id="srcTbody"></tbody>
+      </table>
+    </div>
+  </div>
 </body>
 
 </html>
