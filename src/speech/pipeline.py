@@ -122,7 +122,11 @@ class SpeechPipeline:
         self.cache.add_turn(self.session, "user", text)
 
         result = self.orch.run(translated, session_context=history)
-        self.cache.add_turn(self.session, "assistant", result.get("answer", ""))
+        answer = result.get("answer", "")
+        if lang != "en" and answer:
+            answer = self._translate_to(answer, lang)
+        result["answer"] = answer
+        self.cache.add_turn(self.session, "assistant", answer)
         result["language"] = lang
         return result
 
@@ -152,6 +156,8 @@ class SpeechPipeline:
         print("🤔  Thinking…")
         result = self.orch.run(translated, session_context=history)
         answer = result.get("answer", "")
+        if lang != "en" and answer:
+            answer = self._translate_to(answer, lang)
         print(f"💬  Answer: {answer}\n")
 
         self.cache.add_turn(self.session, "assistant", answer)
@@ -222,6 +228,30 @@ class SpeechPipeline:
         except Exception as e:
             logger.warning("Translation failed (%s); using original", e)
             return text, lang
+
+    def _translate_to(self, text: str, target_lang: str) -> str:
+        """Translate text from English to target_lang using Groq."""
+        try:
+            from openai import OpenAI
+            client = OpenAI(
+                api_key=self._synthesis_api_key,
+                base_url=self._synthesis_base_url,
+            )
+            resp = client.chat.completions.create(
+                model=self._synthesis_model,
+                messages=[
+                    {"role": "system", "content": f"Translate the following text to the language with ISO code '{target_lang}'. Return ONLY the translated text, no explanations."},
+                    {"role": "user",   "content": text},
+                ],
+                temperature=0.0,
+                max_tokens=1000,
+            )
+            translated = resp.choices[0].message.content.strip()
+            logger.info("Back-translated EN → '%s'", target_lang)
+            return translated
+        except Exception as e:
+            logger.warning("Back-translation failed (%s); returning English", e)
+            return text
 
     # ------------------------------------------------------------------
     # TTS with barge-in
