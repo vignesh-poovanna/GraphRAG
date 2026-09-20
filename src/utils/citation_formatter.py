@@ -72,7 +72,8 @@ def format_source_object(chunk: dict, claim_text: str = "") -> dict:
         if key not in metadata and key in chunk:
             metadata[key] = chunk[key]
 
-    return {
+    from src.utils.citation_index import enrich_with_url
+    obj = {
         "claim_text":     claim_text,
         "citation":       format_citation(metadata),
         "source_snippet": chunk.get("text", ""),
@@ -80,3 +81,4 @@ def format_source_object(chunk: dict, claim_text: str = "") -> dict:
         "doc_type":       metadata.get("document_type", "general"),
         "tag":            "[CLEAR]",  # overridden by Phase 6 confidence tagger
     }
+    return enrich_with_url(obj)

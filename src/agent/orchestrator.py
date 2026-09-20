@@ -74,15 +74,18 @@ class Orchestrator:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def run(self, query: str, session_context: list = None) -> dict:
+    def run(self, query: str, session_context: list = None,
+             jurisdiction: str = None) -> dict:
         """
         Classify the query, run the appropriate multi-step retrieval,
         and synthesise a grounded answer.
 
         Args:
             query:           user question string
-            session_context: list of prior {role, content} turns (for continuity
-                             across interruptions — Phase 8 requirement)
+            session_context: list of prior {role, content} turns
+            jurisdiction:    optional lock — "India" or "International".
+                             When None (default), both are retrieved and
+                             the answer covers both sections.
 
         Returns:
             {
@@ -113,7 +116,6 @@ class Orchestrator:
             result = self.qe.generate_answer(query, language=language, session_context=session_context)
             result["trace"] = trace + [{"step": "general_lookup", "note": "single-pass"}]
             result["mode"] = "general"
-            # Extract follow-ups the same way _synthesise does (QE may or may not emit them)
             result.setdefault("follow_ups", [])
             fu_match = re.search(r'FOLLOW_UPS:\s*(\[.*?\])', result.get("answer", ""), re.DOTALL)
             if fu_match:
@@ -126,8 +128,27 @@ class Orchestrator:
                     pass
             return result
 
+        # Dual-jurisdiction retrieval: if no lock, merge Indian + International chunks
+        if jurisdiction:
+            # User toggled to a specific jurisdiction — filter retrieval
+            chunks = self.qe.hybrid_search(query, limit=10, jurisdiction=jurisdiction)
+            trace.append({"step": "jurisdiction_filter", "jurisdiction": jurisdiction,
+                          "chunks_found": len(chunks)})
+        else:
+            # Default: fetch both buckets so the answer covers both sections
+            india_chunks = self.qe.hybrid_search(query, limit=6, jurisdiction="India")
+            intl_chunks  = self.qe.hybrid_search(query, limit=4, jurisdiction="International")
+            # Mark source jurisdiction on each chunk for the prompt
+            for c in india_chunks:
+                c.setdefault("_jur", "India")
+            for c in intl_chunks:
+                c.setdefault("_jur", "International")
+            chunks = india_chunks + intl_chunks
+            trace.append({"step": "dual_retrieval",
+                          "india_chunks": len(india_chunks),
+                          "intl_chunks": len(intl_chunks)})
 
-        # Final synthesis for novelty_check and precedent_lookup
+        # Final synthesis
         return self._synthesise(query, chunks, mode, trace, language,
                                 session_context=session_context)
 
@@ -331,17 +352,30 @@ Reply with ONLY the category name, nothing else."""
         )
         system_msg = (
             f"{lang_instruction}"
-            "You are a concise regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
+            "You are a regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
+            "Structure your answer in EXACTLY this order and format:\n\n"
+            "## Summary\n"
+            "Write 2-3 sentences directly answering the question. Include a direct verdict "
+            "(Yes / No / Conditional) if the question is a yes/no question. "
+            "Tag with [CLEAR], [INFERRED], or [AMBIGUOUS].\n\n"
+            "## Indian Law\n"
+            "2-4 bullet points covering relevant Indian statutes, rules, or case law from the context. "
+            "Each bullet: 1-2 sentences, cite source in square brackets e.g. [1], tag with [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
+            "If no Indian law is relevant to this question, write: *Not applicable.*\n\n"
+            "## International Law\n"
+            "2-3 bullet points covering relevant international treaties, protocols, or instruments from the context. "
+            "Each bullet: 1-2 sentences, cite source in square brackets, tag with [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
+            "If no international instrument is relevant, write: *Not applicable.*\n\n"
+            "## Citations\n"
+            "Numbered list of every source cited above. Format each as:\n"
+            "[N] Clause / Section — Act / Instrument name (Year)\n\n"
             "Rules:\n"
-            "- Write 3 to 6 short bullet points. Each bullet must be 1-2 sentences max.\n"
-            "- Summarize the source in your own words — do NOT copy-paste entire sentences from the source.\n"
-            "- After each bullet, cite the source number(s) in square brackets, e.g. [1] or [1][3].\n"
-            "- Tag each bullet with ONE confidence marker: [CLEAR] if directly stated, [INFERRED] if derived, [AMBIGUOUS] if conflicting.\n"
-            "- End your answer with a blank line then: **Sources:** followed by the cited numbers and their short titles.\n"
-            "- After Sources, add a blank line then: **Verdict:** followed by a direct answer (e.g. Yes / No / Conditional) and one sentence explaining the key condition or reason.\n"
-            "- After Verdict, add a blank line then: FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — exactly 3 short follow-up questions the user might naturally ask next, as a JSON array on one line.\n"
-            "- Do NOT add analysis beyond what is grounded in the context.\n"
+            "- Use ONLY context from the numbered CONTEXT blocks. Do not add external knowledge.\n"
+            "- Do NOT copy-paste entire sentences from the source.\n"
+            "- After Citations, add a blank line then: "
+            "FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — "
+            "exactly 3 short follow-up questions as a JSON array on one line.\n"
             f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
         )
 

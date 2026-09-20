@@ -107,21 +107,39 @@ class SpeechPipeline:
         except KeyboardInterrupt:
             print("\n👋  Voice session ended.")
 
-    def query(self, text: str, client_history: list = None) -> dict:
+    def query(self, text: str, client_history: list = None,
+              wizard_context: dict = None,
+              jurisdiction: str = None) -> dict:
         """
         Non-voice entry point: accepts text directly and returns result dict.
         client_history: last 3 turns from the browser's sessionStorage
                         [{role, content}, ...] — cleared on page refresh.
+        wizard_context: optional dict of wizard Q&A answers from the web UI.
+                        Converted to a product-profile system message and
+                        prepended to session context before synthesis.
+                        Never sent from WhatsApp — naturally excluded.
         """
         # Prefer client-supplied history (fresher, capped at 3); fall back to DB
         if client_history:
             history = client_history[-3:]
         else:
             history = self.cache.get_history(self.session, last_n=3)
+
+        # Prepend wizard product profile as a system message if provided
+        if wizard_context:
+            try:
+                from src.classifier.formulation_classifier import format_wizard_context
+                profile = format_wizard_context(wizard_context)
+                if profile:
+                    history = [{"role": "system", "content": profile}] + history
+            except Exception as e:
+                logger.warning("wizard_context formatting failed: %s", e)
+
         translated, lang = self._maybe_translate(text)
         self.cache.add_turn(self.session, "user", text)
 
-        result = self.orch.run(translated, session_context=history)
+        result = self.orch.run(translated, session_context=history,
+                               jurisdiction=jurisdiction)
         answer = result.get("answer", "")
         if lang != "en" and answer:
             answer = self._translate_to(answer, lang)

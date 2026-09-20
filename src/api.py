@@ -41,6 +41,7 @@ from src.agent.orchestrator import Orchestrator
 from src.speech.session_cache import SessionCache
 from src.utils.citation_index import load_citations_index
 from src.whatsapp import router as whatsapp_router
+from src.classifier.formulation_classifier import WIZARD_QUESTIONS, classify_from_answers
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,8 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = None
     limit: int = 5
     history: list[dict] = []   # [{role, content}, ...] last 3 turns from client
+    wizard_context: dict = {}  # wizard Q&A answers — web UI only, never WhatsApp
+    jurisdiction: Optional[str] = None  # "India" | "International" | None (both)
 
 
 class VoiceQueryRequest(BaseModel):
@@ -145,7 +148,9 @@ async def query(req: QueryRequest):
     # but here we call orchestrator directly (voice pipeline handles its own)
     from src.speech.pipeline import SpeechPipeline
     pipe = SpeechPipeline(orch, _state["cfg"], session_id=sid)
-    result = pipe.query(req.query, client_history=req.history)
+    result = pipe.query(req.query, client_history=req.history,
+                        wizard_context=req.wizard_context or None,
+                        jurisdiction=req.jurisdiction or None)
 
     return QueryResponse(
         answer=result.get("answer", ""),
@@ -329,6 +334,52 @@ async def tts(req: TTSRequest):
     except Exception as e:
         logger.error("TTS error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Formulation Classification Wizard
+# ---------------------------------------------------------------------------
+
+
+class ClassifyRequest(BaseModel):
+    session_id: Optional[str] = None
+    answers: dict   # {"Q1": "...", "Q2": "...", ..., "Q6": "..."}
+
+
+class ClassifyResponse(BaseModel):
+    session_id: str
+    archetype: int
+    posture: dict
+    answers_summary: dict
+
+
+@app.get("/classify/questions")
+async def get_wizard_questions():
+    """
+    Return all 6 wizard questions with tap-to-choose options in one shot.
+    Frontend renders slides locally — no round-trip between slides.
+    """
+    return {"questions": WIZARD_QUESTIONS}
+
+
+@app.post("/classify", response_model=ClassifyResponse)
+async def classify(req: ClassifyRequest):
+    """
+    Accept all 6 answers in one batch call (after user completes all slides).
+    Returns archetype ID + full IP/ABS posture.
+    """
+    cache: SessionCache = _state["cache"]
+    sid = cache.new_session(req.session_id)
+    cache.save_wizard_answers(sid, req.answers)
+
+    result = classify_from_answers(req.answers)
+
+    return ClassifyResponse(
+        session_id=sid,
+        archetype=result["archetype"],
+        posture=result["posture"],
+        answers_summary=req.answers,
+    )
 
 
 # ---------------------------------------------------------------------------

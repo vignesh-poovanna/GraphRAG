@@ -10,6 +10,7 @@ Schema:
   turns(session_id TEXT, turn_idx INT, role TEXT, content TEXT, ts REAL)
 """
 
+import json as _json
 import sqlite3
 import time
 import uuid
@@ -104,6 +105,25 @@ class SessionCache:
             (limit,)
         ).fetchall()
         return [{"id": r[0], "created_at": r[1]} for r in rows]
+
+    def save_wizard_answers(self, session_id: str, answers: dict):
+        """Persist collected wizard answers (stored as a special turn role)."""
+        self.add_turn(session_id, "wizard_answers", _json.dumps(answers))
+
+    def load_wizard_answers(self, session_id: str) -> dict:
+        """Return the most recently saved wizard answers for a session, or {}."""
+        rows = self._db.execute(
+            """SELECT content FROM turns
+               WHERE session_id=? AND role='wizard_answers'
+               ORDER BY turn_idx DESC LIMIT 1""",
+            (session_id,)
+        ).fetchone()
+        if rows:
+            try:
+                return _json.loads(rows[0])
+            except Exception:
+                return {}
+        return {}
 
     def close(self):
         """Explicitly close the DB connection (needed on Windows for file cleanup)."""

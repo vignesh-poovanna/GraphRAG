@@ -30,14 +30,19 @@ class QueryEngine:
             logger.warning("Qdrant connection not established, attempting to connect")
             self.qdrant.connect()
     
-    def semantic_search(self, query: str, limit: int = 5, category: Optional[str] = None) -> List[Dict[Any, Any]]:
+    def semantic_search(self, query: str, limit: int = 5, category: Optional[str] = None,
+                         jurisdiction: Optional[str] = None) -> List[Dict[Any, Any]]:
         """Perform semantic search using Qdrant"""
-        logger.info(f"Semantic search: '{query}' (limit: {limit}, category: {category})")
+        logger.info(f"Semantic search: '{query}' (limit: {limit}, category: {category}, jurisdiction: {jurisdiction})")
         
-        # Set up filter if category is provided
-        filter_conditions = None
+        # Build filter conditions
+        filter_conditions = {}
         if category:
-            filter_conditions = {'category': category}
+            filter_conditions['category'] = category
+        if jurisdiction:
+            filter_conditions['jurisdiction'] = jurisdiction
+        if not filter_conditions:
+            filter_conditions = None
             
         # Perform vector search
         try:
@@ -102,6 +107,7 @@ class QueryEngine:
             return {}
     
     def hybrid_search(self, query: str, limit: int = 5, category: Optional[str] = None,
+                       jurisdiction: Optional[str] = None,
                        semantic_weight: float = 0.7) -> List[Dict[Any, Any]]:
         """
         Hybrid search: vector similarity + graph expansion + concept graph expansion.
@@ -117,7 +123,8 @@ class QueryEngine:
             import re
             # Step 1: vector search with wider candidate pool for reranking headroom
             candidate_limit = max(limit * 8, 40)
-            semantic_results = self.semantic_search(query, candidate_limit, category)
+            semantic_results = self.semantic_search(query, candidate_limit, category,
+                                                     jurisdiction=jurisdiction)
             if not semantic_results:
                 logger.warning("No semantic search results found")
                 return []
