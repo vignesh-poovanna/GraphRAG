@@ -80,5 +80,6 @@ def format_source_object(chunk: dict, claim_text: str = "") -> dict:
         "metadata":       metadata,
         "doc_type":       metadata.get("document_type", "general"),
         "tag":            "[CLEAR]",  # overridden by Phase 6 confidence tagger
+        "score":          chunk.get("score"),
     }
     return enrich_with_url(obj)

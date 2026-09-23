@@ -126,6 +126,7 @@ class QueryResponse(BaseModel):
     trace: list[dict]
     session_id: str
     follow_ups: list[str] = []
+    confidence_score: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------
@@ -152,15 +153,17 @@ async def query(req: QueryRequest):
                         wizard_context=req.wizard_context or None,
                         jurisdiction=req.jurisdiction or None)
 
+    srcs = result.get("sources", [])
     return QueryResponse(
         answer=result.get("answer", ""),
         mode=result.get("mode", "general"),
         language=result.get("language", "en"),
         tags=result.get("tags", []),
-        sources=result.get("sources", []),
+        sources=srcs,
         trace=result.get("trace", []),
         session_id=sid,
         follow_ups=result.get("follow_ups", []),
+        confidence_score=srcs[0].get("score") if srcs else None,
     )
 
 
@@ -207,15 +210,17 @@ async def query_voice(req: VoiceQueryRequest):
             raise HTTPException(status_code=422, detail="Could not transcribe audio")
 
         result = pipe.query(text, client_history=req.history)
+        vrcs = result.get("sources", [])
         return QueryResponse(
             answer=result.get("answer", ""),
             mode=result.get("mode", "general"),
             language=result.get("language", "en"),
             tags=result.get("tags", []),
-            sources=result.get("sources", []),
+            sources=vrcs,
             trace=result.get("trace", []),
             session_id=sid,
             follow_ups=result.get("follow_ups", []),
+            confidence_score=vrcs[0].get("score") if vrcs else None,
         )
     except HTTPException:
         raise
@@ -388,7 +393,7 @@ async def classify(req: ClassifyRequest):
 
 @app.get("/")
 async def serve_index():
-    return FileResponse("frontend/index.html")
+    return FileResponse("frontend/new.html")
 
 
 @app.get("/whatsapp_qr.png")
