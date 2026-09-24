@@ -112,8 +112,9 @@ class Orchestrator:
         elif mode == "procedural":
             return self._procedural(query, trace, language)
         else:
-            # general: delegate entirely to query_engine.generate_answer
-            result = self.qe.generate_answer(query, language=language, session_context=session_context)
+            # general: delegate to query_engine.generate_answer with jurisdiction
+            result = self.qe.generate_answer(query, language=language, session_context=session_context,
+                                             jurisdiction=jurisdiction)
             result["trace"] = trace + [{"step": "general_lookup", "note": "single-pass"}]
             result["mode"] = "general"
             result.setdefault("follow_ups", [])
@@ -150,7 +151,8 @@ class Orchestrator:
 
         # Final synthesis
         return self._synthesise(query, chunks, mode, trace, language,
-                                session_context=session_context)
+                                session_context=session_context,
+                                jurisdiction=jurisdiction)
 
     # ------------------------------------------------------------------
     # Query classification
@@ -320,7 +322,7 @@ Reply with ONLY the category name, nothing else."""
 
     def _synthesise(self, query: str, chunks: list, mode: str, trace: list,
                     language: str, session_context: list = None,
-                    jurisdiction_map: dict = None) -> dict:
+                    jurisdiction_map: dict = None, jurisdiction: str = None) -> dict:
         """
         Run generate_answer() over the already-retrieved chunks.
         Guardrail (no hallucination) is enforced by query_engine.generate_answer.
@@ -350,27 +352,64 @@ Reply with ONLY the category name, nothing else."""
             "Respond in the same language as the question. "
             if language not in ("en", "") else ""
         )
+        # Build jurisdiction-specific section instructions
+        if jurisdiction == "India":
+            sections = (
+                "## Summary\n"
+                "ONE sentence only: state Yes / No / Conditional and the key reason under Indian law. "
+                "End with [CLEAR], [INFERRED], or [AMBIGUOUS]. No paragraphs.\n\n"
+                "## Indian Law\n"
+                "BULLET LIST ONLY — 3 to 5 items. Each item MUST start with '- '. "
+                "Each bullet: name the specific Act / Section, explain its effect in 1-2 sentences, "
+                "cite with [N], end with [CLEAR], [INFERRED], or [AMBIGUOUS]. "
+                "Do NOT write paragraphs here.\n\n"
+                "## Citations\n"
+                "Numbered list matching every [N] reference used above:\n"
+                "[1] Section / Clause — Act Name (Year)\n"
+                "[2] ...\n"
+            )
+        elif jurisdiction == "International":
+            sections = (
+                "## Summary\n"
+                "ONE sentence only: state Yes / No / Conditional and the key reason under international law. "
+                "End with [CLEAR], [INFERRED], or [AMBIGUOUS]. No paragraphs.\n\n"
+                "## International Law\n"
+                "BULLET LIST ONLY — 3 to 5 items. Each item MUST start with '- '. "
+                "Each bullet: name the specific Treaty / Article / Protocol, explain its effect in 1-2 sentences, "
+                "cite with [N], end with [CLEAR], [INFERRED], or [AMBIGUOUS]. "
+                "Do NOT write paragraphs here.\n\n"
+                "## Citations\n"
+                "Numbered list matching every [N] reference used above:\n"
+                "[1] Article / Clause — Treaty Name (Year)\n"
+                "[2] ...\n"
+            )
+        else:
+            sections = (
+                "## Summary\n"
+                "ONE sentence only: state Yes / No / Conditional and the key reason. "
+                "End with [CLEAR], [INFERRED], or [AMBIGUOUS]. No paragraphs.\n\n"
+                "## Indian Law\n"
+                "BULLET LIST ONLY — 3 to 5 items. Each item MUST start with '- '. "
+                "Each bullet: name Act / Section, explain in 1-2 sentences, cite [N], tag [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
+                "If no Indian law applies, write: - Not applicable.\n\n"
+                "## International Law\n"
+                "BULLET LIST ONLY — 2 to 4 items. Each item MUST start with '- '. "
+                "Each bullet: name Treaty / Article, explain in 1-2 sentences, cite [N], tag [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
+                "If no international law applies, write: - Not applicable.\n\n"
+                "## Citations\n"
+                "Numbered list matching every [N] reference used above:\n"
+                "[1] Section / Clause — Act / Treaty Name (Year)\n"
+                "[2] ...\n"
+            )
+
         system_msg = (
             f"{lang_instruction}"
             "You are a regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
-            "Structure your answer in EXACTLY this order and format:\n\n"
-            "## Summary\n"
-            "Write 2-3 sentences directly answering the question. Include a direct verdict "
-            "(Yes / No / Conditional) if the question is a yes/no question. "
-            "Tag with [CLEAR], [INFERRED], or [AMBIGUOUS].\n\n"
-            "## Indian Law\n"
-            "2-4 bullet points covering relevant Indian statutes, rules, or case law from the context. "
-            "Each bullet: 1-2 sentences, cite source in square brackets e.g. [1], tag with [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
-            "If no Indian law is relevant to this question, write: *Not applicable.*\n\n"
-            "## International Law\n"
-            "2-3 bullet points covering relevant international treaties, protocols, or instruments from the context. "
-            "Each bullet: 1-2 sentences, cite source in square brackets, tag with [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
-            "If no international instrument is relevant, write: *Not applicable.*\n\n"
-            "## Citations\n"
-            "Numbered list of every source cited above. Format each as:\n"
-            "[N] Clause / Section — Act / Instrument name (Year)\n\n"
-            "Rules:\n"
+            "CRITICAL: Do NOT write free-form paragraphs. Do NOT add prose outside the defined sections. "
+            "Do NOT reorder sections. Output EXACTLY the sections below in order:\n\n"
+            + sections +
+            "\nRules:\n"
             "- Use ONLY context from the numbered CONTEXT blocks. Do not add external knowledge.\n"
             "- Do NOT copy-paste entire sentences from the source.\n"
             "- After Citations, add a blank line then: "

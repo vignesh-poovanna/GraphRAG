@@ -375,6 +375,7 @@ class QueryEngine:
         host: str = None,
         language: str = "en",
         session_context: list = None,   # [{role, content}, ...] last 3 turns
+        jurisdiction: str = None,       # "India" | "International" | None (both)
     ) -> dict:
         """
         Perform hybrid retrieval and generate a strictly grounded answer.
@@ -425,18 +426,63 @@ class QueryEngine:
             if language not in ("en", "") else ""
         )
 
+        if jurisdiction == "India":
+            sections = (
+                "## Summary\n"
+                "ONE sentence only: state Yes / No / Conditional and the key reason under Indian law. "
+                "End with [CLEAR], [INFERRED], or [AMBIGUOUS]. No paragraphs.\n\n"
+                "## Indian Law\n"
+                "BULLET LIST ONLY — 3 to 5 items. Each item MUST start with '- '. "
+                "Each bullet: name the specific Act / Section, explain its effect in 1-2 sentences, "
+                "cite with [N], end with [CLEAR], [INFERRED], or [AMBIGUOUS]. Do NOT write paragraphs.\n\n"
+                "## Citations\n"
+                "Numbered list matching every [N] reference used above:\n"
+                "[1] Section / Clause — Act Name (Year)\n[2] ...\n"
+            )
+        elif jurisdiction == "International":
+            sections = (
+                "## Summary\n"
+                "ONE sentence only: state Yes / No / Conditional and the key reason under international law. "
+                "End with [CLEAR], [INFERRED], or [AMBIGUOUS]. No paragraphs.\n\n"
+                "## International Law\n"
+                "BULLET LIST ONLY — 3 to 5 items. Each item MUST start with '- '. "
+                "Each bullet: name the specific Treaty / Article / Protocol, explain its effect in 1-2 sentences, "
+                "cite with [N], end with [CLEAR], [INFERRED], or [AMBIGUOUS]. Do NOT write paragraphs.\n\n"
+                "## Citations\n"
+                "Numbered list matching every [N] reference used above:\n"
+                "[1] Article / Clause — Treaty Name (Year)\n[2] ...\n"
+            )
+        else:
+            sections = (
+                "## Summary\n"
+                "ONE sentence only: state Yes / No / Conditional and the key reason. "
+                "End with [CLEAR], [INFERRED], or [AMBIGUOUS]. No paragraphs.\n\n"
+                "## Indian Law\n"
+                "BULLET LIST ONLY — 3 to 5 items. Each item MUST start with '- '. "
+                "Each bullet: name Act / Section, explain in 1-2 sentences, cite [N], tag [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
+                "If no Indian law applies, write: - Not applicable.\n\n"
+                "## International Law\n"
+                "BULLET LIST ONLY — 2 to 4 items. Each item MUST start with '- '. "
+                "Each bullet: name Treaty / Article, explain in 1-2 sentences, cite [N], tag [CLEAR]/[INFERRED]/[AMBIGUOUS].\n"
+                "If no international law applies, write: - Not applicable.\n\n"
+                "## Citations\n"
+                "Numbered list matching every [N] reference used above:\n"
+                "[1] Section / Clause — Act / Treaty Name (Year)\n[2] ...\n"
+            )
+
         system_msg = (
             f"{lang_instruction}"
-            "You are a concise regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
+            "You are a regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
-            "Rules:\n"
-            "- Write 3 to 6 short bullet points. Each bullet must be 1-2 sentences max.\n"
-            "- Summarize the source in your own words — do NOT copy-paste entire sentences from the source.\n"
-            "- After each bullet, cite the source number(s) in square brackets, e.g. [1] or [1][3].\n"
-            "- Tag each bullet with ONE confidence marker: [CLEAR] if directly stated, [INFERRED] if derived, [AMBIGUOUS] if conflicting.\n"
-            "- End your answer with a blank line then: **Sources:** followed by the cited numbers and their short titles.\n"
-            "- After Sources, add a blank line then: **Verdict:** followed by a direct answer (e.g. Yes / No / Conditional) and one sentence explaining the key condition or reason.\n"
-            "- After Verdict, add a blank line then: FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — exactly 3 short follow-up questions the user might naturally ask next, as a JSON array on one line.\n"
+            "CRITICAL: Do NOT write free-form paragraphs. Do NOT reorder sections. "
+            "Output EXACTLY the sections below in order:\n\n"
+            + sections +
+            "\nRules:\n"
+            "- Use ONLY context from the numbered CONTEXT blocks. Do not add external knowledge.\n"
+            "- Do NOT copy-paste entire sentences from the source.\n"
+            "- After Citations, add a blank line then: "
+            "FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — "
+            "exactly 3 short follow-up questions as a JSON array on one line.\n"
             f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self._FALLBACK}\""
         )
 
