@@ -340,11 +340,19 @@ Reply with ONLY the category name, nothing else."""
                 "tags":     [],
             }
 
-        # Number chunks so the LLM can cite them inline
+        # Number chunks — include real source name so LLM cites correctly
         used_chunks = [c for c in chunks if c.get("text")][:8]
-        numbered_context = "\n---\n".join(
-            f"[{i+1}] {c['text']}" for i, c in enumerate(used_chunks)
-        )
+        def _ctx_label(i, c):
+            import os
+            meta = c.get("metadata") or {}
+            raw_path = meta.get("path", "")
+            fallback = os.path.splitext(os.path.basename(raw_path))[0] if raw_path else (c.get("doc_id", "") or "Unknown Source")
+            name = meta.get("act_or_source_name") or meta.get("title") or fallback
+            sec = meta.get("section", "")
+            year = meta.get("year", "")
+            label = name + (f", Section {sec}" if sec else "") + (f" ({year})" if year else "")
+            return f"[{i+1}] SOURCE: {label}\n{c['text']}"
+        numbered_context = "\n---\n".join(_ctx_label(i, c) for i, c in enumerate(used_chunks))
 
         lang_instruction = (
             "Respond in Hindi (Devanagari script). "
@@ -405,17 +413,27 @@ Reply with ONLY the category name, nothing else."""
         system_msg = (
             f"{lang_instruction}"
             "You are a regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
-            "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
-            "CRITICAL: Do NOT write free-form paragraphs. Do NOT add prose outside the defined sections. "
-            "Do NOT reorder sections. Output EXACTLY the sections below in order:\n\n"
+            "Answer the QUESTION using ONLY the numbered CONTEXT blocks below.\n\n"
+            "STRICT RULES — violating any rule makes the response invalid:\n"
+            "1. Output EXACTLY the section headers below, in order, nothing else.\n"
+            "2. ## Summary: EXACTLY ONE sentence. Start with Yes / No / Conditional. End with [CLEAR], [INFERRED], or [AMBIGUOUS].\n"
+            "3. Law section: BULLET LIST ONLY. Every bullet starts with '- '. Max 5 bullets.\n"
+            "4. ## Citations: copy the SOURCE label from the context block EXACTLY. Never write 'Context Block', never write doc IDs.\n"
+            "5. After Citations, one blank line, then: FOLLOW_UPS: [\"q1?\", \"q2?\", \"q3?\"] on one line.\n\n"
+            "EXAMPLE OUTPUT (India jurisdiction):\n"
+            "## Summary\n"
+            "No — pure herbal combinations with identical traditional uses are non-patentable under Section 3(p). [CLEAR]\n\n"
+            "## Indian Law\n"
+            "- Section 3(p), Patents Act 1970 — bars patents on traditional knowledge or aggregations of known properties of traditional components. [1] [CLEAR]\n"
+            "- Section 3(e), Patents Act 1970 — excludes admixtures resulting only in aggregation of component properties. [2] [CLEAR]\n\n"
+            "## Citations\n"
+            "[1] Patents Act, 1970 (2005)\n"
+            "[2] Patents Act, 1970 (2005)\n\n"
+            "FOLLOW_UPS: [\"What is the inventive step threshold?\", \"Does TKDL count as prior art?\", \"Can a process patent be obtained instead?\"]\n\n"
+            "END EXAMPLE\n\n"
+            "Now output sections:\n\n"
             + sections +
-            "\nRules:\n"
-            "- Use ONLY context from the numbered CONTEXT blocks. Do not add external knowledge.\n"
-            "- Do NOT copy-paste entire sentences from the source.\n"
-            "- After Citations, add a blank line then: "
-            "FOLLOW_UPS: [\"question 1?\", \"question 2?\", \"question 3?\"] — "
-            "exactly 3 short follow-up questions as a JSON array on one line.\n"
-            f"- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
+            f"\n- If the CONTEXT has zero relevant content, respond with EXACTLY: \"{self.qe._FALLBACK}\""
         )
 
         # Include session context for continuity (Phase 8)

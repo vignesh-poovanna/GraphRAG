@@ -399,11 +399,18 @@ class QueryEngine:
         if not results:
             return {"answer": self._FALLBACK, "sources": [], "context": "", "language": language, "tags": []}
 
-        # Number chunks so LLM can cite inline; also build source objects for frontend
-        context_chunks = [r.get("text", "") for r in results if r.get("text")]
-        numbered_context = "\n---\n".join(
-            f"[{i+1}] {t}" for i, t in enumerate(context_chunks)
-        )
+        # Number chunks — include real source name so LLM cites correctly
+        def _ctx_label(i, r):
+            import os
+            meta = r.get("metadata") or {}
+            raw_path = meta.get("path", "")
+            fallback = os.path.splitext(os.path.basename(raw_path))[0] if raw_path else (r.get("doc_id", "") or "Unknown Source")
+            name = meta.get("act_or_source_name") or meta.get("title") or fallback
+            sec = meta.get("section", "")
+            year = meta.get("year", "")
+            label = name + (f", Section {sec}" if sec else "") + (f" ({year})" if year else "")
+            return f"[{i+1}] SOURCE: {label}\n{r.get('text', '')}"
+        numbered_context = "\n---\n".join(_ctx_label(i, r) for i, r in enumerate(results) if r.get("text"))
         context = numbered_context  # kept for the return value
         sources = [format_source_object(r) for r in results]
 

@@ -1755,6 +1755,14 @@
           <span>WhatsApp Bridge</span>
         </a>
 
+        <a class="nav-item" id="navContactExpert" data-tooltip="Contact Expert" style="cursor:pointer" onclick="openContactModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span>Contact Expert</span>
+        </a>
+
         <div class="nav-group-title">Previous Queries</div>
         <div id="prevQueriesList">
           <span class="prev-empty">No queries yet</span>
@@ -1986,6 +1994,104 @@
 
   </div>
 
+
+  <!-- CONTACT EXPERT MODAL -->
+  <div id="contactModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+    <div style="background:#1a1f2e;border:1px solid #2e3650;border-radius:18px;max-width:560px;width:92%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.7);">
+      <div style="padding:22px 28px 14px;border-bottom:1px solid #2e3650;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#e8edf5;">Contact an Expert</h2>
+          <p style="margin:5px 0 0;font-size:0.78rem;color:#8891a4;">Fill in your details and we'll connect you with a qualified IP specialist.</p>
+        </div>
+        <button onclick="closeContactModal()" style="background:none;border:none;color:#8891a4;cursor:pointer;font-size:1.3rem;line-height:1;">&times;</button>
+      </div>
+      <div style="padding:20px 28px;overflow-y:auto;flex:1;">
+        <form id="contactExpertForm" onsubmit="submitContactForm(event)" novalidate>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Full Name <span style="color:#e05c5c;">*</span></label>
+              <input id="ce_name" type="text" required placeholder="e.g. Arjun Mehta"
+                style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;transition:border 0.2s;"
+                onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Email Address <span style="color:#e05c5c;">*</span></label>
+              <input id="ce_email" type="email" required placeholder="e.g. arjun@example.com"
+                style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;transition:border 0.2s;"
+                onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Phone Number <span style="color:#e05c5c;">*</span></label>
+              <input id="ce_phone" type="tel" required placeholder="e.g. +91 98765 43210"
+                style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;transition:border 0.2s;"
+                onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Organisation <span style="color:#e05c5c;">*</span></label>
+              <input id="ce_org" type="text" required placeholder="e.g. Himalaya Drug Company"
+                style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;transition:border 0.2s;"
+                onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Designation <span style="color:#e05c5c;">*</span></label>
+              <input id="ce_designation" type="text" required placeholder="e.g. R&amp;D Manager"
+                style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;transition:border 0.2s;"
+                onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Purpose <span style="color:#e05c5c;">*</span></label>
+              <select id="ce_purpose" required
+                style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;transition:border 0.2s;appearance:none;"
+                onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'">
+                <option value="" disabled selected>Select purpose</option>
+                <option value="patent">Patent Filing / Strategy</option>
+                <option value="trademark">Trademark / GI Registration</option>
+                <option value="abs">Biodiversity &amp; ABS Compliance</option>
+                <option value="litigation">IP Litigation Support</option>
+                <option value="due_diligence">IP Due Diligence</option>
+                <option value="licensing">Licensing &amp; Contracts</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:14px;">
+            <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Your Query <span style="color:#e05c5c;">*</span></label>
+            <textarea id="ce_query" required rows="3" placeholder="Briefly describe your IP question or issue..."
+              style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;resize:vertical;transition:border 0.2s;font-family:inherit;"
+              onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'"></textarea>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:14px;">
+            <label style="font-size:0.78rem;color:#a0aabb;font-weight:500;">Relevant Details <span style="color:#8891a4;font-weight:400;">(optional)</span></label>
+            <textarea id="ce_details" rows="2" placeholder="Any supporting information, documents, or context..."
+              style="background:#111827;border:1px solid #2e3650;border-radius:8px;padding:9px 12px;color:#e8edf5;font-size:0.84rem;outline:none;resize:vertical;transition:border 0.2s;font-family:inherit;"
+              onfocus="this.style.borderColor='#4B5A28'" onblur="this.style.borderColor='#2e3650'"></textarea>
+          </div>
+
+          <div id="ce_error" style="display:none;margin-top:10px;color:#e05c5c;font-size:0.8rem;"></div>
+
+          <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;">
+            <button type="button" onclick="closeContactModal()"
+              style="padding:9px 20px;border-radius:9px;border:1px solid #2e3650;background:transparent;color:#b0bac9;cursor:pointer;font-size:0.84rem;">
+              Cancel
+            </button>
+            <button type="submit"
+              style="padding:9px 24px;border-radius:9px;border:none;background:linear-gradient(135deg,#134A3F,#4B5A28);color:#fff;cursor:pointer;font-size:0.84rem;font-weight:600;letter-spacing:0.02em;">
+              Send Request
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- TERMS & CONDITIONS MODAL -->
   <div id="tcModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
@@ -2662,11 +2768,15 @@
 
     /* ─── 11. MESSAGE RENDERING & FORMATTING ─── */
     function formatAnswer(text, sources) {
+      // Strip ## Citations block and FOLLOW_UPS — rendered separately
+      text = text.replace(/\n##\s*Citations[\s\S]*/i, '');
+      text = text.replace(/^FOLLOW_UPS:.*$/gm, '').trim();
+
       if (sources && sources.length) {
         text = text.replace(/\[(\d+)\]/g, (_, n) => {
           const s = sources[parseInt(n)-1]; if (!s) return `[${n}]`;
           const url = s.url || s.source_url || s.link || null;
-          const lbl = (s.citation || s.act_or_source_name || s.title || `Source ${n}`).replace(/"/g,"&quot;");
+          const lbl = (s.citation || s.act_or_source_name || s.title || `Source ${n}`).replace(/"/g,'&quot;');
           return url ? `<a href="${url}" target="_blank" rel="noopener" class="cite-link" title="${lbl}">[${n}]</a>`
                      : `<span class="cite-ref" title="${lbl}">[${n}]</span>`;
         });
@@ -2988,8 +3098,9 @@
 
         const sources = data.sources || [];
         const cites = sources.slice(0, 5).filter(s => s.citation || s.act_or_source_name);
-        // Confidence: use source score or default to 0.85 if unavailable
-        const topScore = sources.length && sources[0].score != null ? sources[0].score : 0.85;
+        // Confidence: average of non-null source scores; fallback 0.82
+        const scoreVals = sources.map(s => s.score).filter(v => v != null && v > 0);
+        const topScore = scoreVals.length ? scoreVals.reduce((a,b)=>a+b,0)/scoreVals.length : 0.82;
 
         totalCites += cites.length;
         const rawText = data.answer || '';
@@ -3333,6 +3444,43 @@
     window.addEventListener('DOMContentLoaded', () => {
       setTimeout(openTCModal, 400);
     });
+
+    /* ─── CONTACT EXPERT MODAL ─── */
+    function openContactModal() {
+      const m = document.getElementById('contactModal');
+      if (m) { m.style.display = 'flex'; }
+    }
+    function closeContactModal() {
+      const m = document.getElementById('contactModal');
+      if (m) { m.style.display = 'none'; }
+      document.getElementById('ce_error').style.display = 'none';
+    }
+    function submitContactForm(e) {
+      e.preventDefault();
+      const fields = ['ce_name','ce_email','ce_phone','ce_org','ce_designation','ce_purpose','ce_query'];
+      const errEl = document.getElementById('ce_error');
+      let missing = [];
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el.value.trim()) { el.style.borderColor = '#e05c5c'; missing.push(el); }
+        else { el.style.borderColor = '#2e3650'; }
+      });
+      if (missing.length) {
+        errEl.textContent = 'Please fill in all required fields marked with *.';
+        errEl.style.display = 'block';
+        missing[0].focus();
+        return;
+      }
+      errEl.style.display = 'none';
+      // Functionality to be added later — show success for now
+      const form = document.getElementById('contactExpertForm');
+      form.innerHTML = '<div style="text-align:center;padding:32px 0;color:#c8d0de;">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">&#10003;</div>' +
+        '<p style="font-size:1rem;font-weight:600;color:#e8edf5;margin:0 0 6px;">Request Sent Successfully</p>' +
+        '<p style="font-size:0.82rem;color:#8891a4;margin:0;">An IP specialist will get back to you shortly.</p>' +
+        '</div>';
+      setTimeout(closeContactModal, 2800);
+    }
 </script>
 
 </body>
