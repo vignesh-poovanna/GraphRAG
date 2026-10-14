@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>GraphRAG: IP-SAKTI Sahayak — Launch Presentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background-color: #060e0c;
+        color: #ffffff;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #root {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 30%, #0d261e 0%, #081612 55%, #040907 100%);
+      }
+      .bg-glow-top {
+        position: absolute;
+        top: -200px;
+        left: 20%;
+        width: 1100px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(19, 74, 63, 0.45) 0%, rgba(19, 74, 63, 0) 70%);
+        filter: blur(80px);
+        pointer-events: none;
+      }
+      .bg-glow-bottom {
+        position: absolute;
+        bottom: -200px;
+        right: 15%;
+        width: 1000px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(226, 141, 56, 0.2) 0%, rgba(226, 141, 56, 0) 70%);
+        filter: blur(90px);
+        pointer-events: none;
+      }
+      .grid-lines {
+        position: absolute;
+        inset: 0;
+        background-image: 
+          linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        background-size: 80px 80px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="55"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div class="bg-glow-top"></div>
+      <div class="bg-glow-bottom"></div>
+      <div class="grid-lines"></div>
+
+      <!-- AUDIO TRACKS (relative to composition directory) -->
+      <audio id="bgm" src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3" data-start="0" data-duration="55"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="0.3" data-duration="1.48"></audio>
+      <audio id="sfx-ping1" src="assets/sfx/interface/bong_001.ogg" data-start="8.2" data-duration="0.12"></audio>
+      <audio id="sfx-ping2" src="assets/sfx/interface/bong_001.ogg" data-start="17.2" data-duration="0.12"></audio>
+      <audio id="sfx-ping3" src="assets/sfx/interface/bong_001.ogg" data-start="27.2" data-duration="0.12"></audio>
+      <audio id="sfx-switch" src="assets/sfx/interface/switch_001.ogg" data-start="38.2" data-duration="0.62"></audio>
+      <audio id="sfx-finale" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="48.2" data-duration="1.48"></audio>
+
+      <!-- SCENES MOUNTED AS MODULAR SUB-COMPOSITIONS -->
+      <div
+        id="scene1"
+        class="clip"
+        data-composition-id="scene1"
+        data-composition-src="compositions/scene1.html"
+        data-start="0"
+        data-duration="8"
+        data-track-index="0"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="scene2"
+        class="clip"
+        data-composition-id="scene2"
+        data-composition-src="compositions/scene2.html"
+        data-start="8"
+        data-duration="9"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="scene3"
+        class="clip"
+        data-composition-id="scene3"
+        data-composition-src="compositions/scene3.html"
+        data-start="17"
+        data-duration="10"
+        data-track-index="2"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="scene4"
+        class="clip"
+        data-composition-id="scene4"
+        data-composition-src="compositions/scene4.html"
+        data-start="27"
+        data-duration="11"
+        data-track-index="3"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="scene5"
+        class="clip"
+        data-composition-id="scene5"
+        data-composition-src="compositions/scene5.html"
+        data-start="38"
+        data-duration="10"
+        data-track-index="4"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="scene6"
+        class="clip"
+        data-composition-id="scene6"
+        data-composition-src="compositions/scene6.html"
+        data-start="48"
+        data-duration="7"
+        data-track-index="5"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

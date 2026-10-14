@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          padding: 60px 100px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          color: #ffffff;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          box-sizing: border-box;
+        }
+
+        .finale-logo {
+          width: 104px;
+          height: 104px;
+          border-radius: 28px;
+          background: linear-gradient(135deg, #134a3f 0%, #b76f26 100%);
+          border: 2px solid rgba(246, 173, 85, 0.6);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 50px;
+          box-shadow: 0 0 50px rgba(226, 141, 56, 0.5);
+          margin-bottom: 24px;
+        }
+
+        .pill-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 20px;
+          border-radius: 9999px;
+          background: rgba(226, 141, 56, 0.15);
+          border: 1px solid rgba(226, 141, 56, 0.4);
+          color: #f6ad55;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          width: fit-content;
+          margin-bottom: 18px;
+        }
+
+        .finale-title {
+          font-family: 'Inter', sans-serif;
+          font-size: 68px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          line-height: 1.1;
+          color: #ffffff;
+          margin-bottom: 16px;
+        }
+
+        .finale-sub {
+          font-size: 24px;
+          color: #f6ad55;
+          font-weight: 600;
+          max-width: 960px;
+          margin-bottom: 38px;
+          line-height: 1.4;
+        }
+
+        .badge-strip {
+          display: flex;
+          gap: 16px;
+          flex-wrap: wrap;
+          justify-content: center;
+          max-width: 1050px;
+        }
+
+        .tech-chip {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          padding: 10px 22px;
+          border-radius: 9999px;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 14px;
+          font-weight: 600;
+          color: #e5ece8;
+        }
+      </style>
+
+      <div id="root" data-composition-id="scene6" data-width="1920" data-height="1080">
+        <div id="s6-logo" class="finale-logo">🌿</div>
+        <div id="s6-badge" class="pill-badge">SMART INDIA HACKATHON 2026 · MINISTRY OF AYUSH</div>
+        <h1 id="s6-title" class="finale-title">
+          IP-SAKTI Sahayak
+        </h1>
+        <p id="s6-sub" class="finale-sub">
+          "Defending Heritage. Accelerating Global Innovation. Eliminating Hallucination."
+        </p>
+        <div id="s6-badges" class="badge-strip">
+          <div class="tech-chip">Neo4j 5.18 Enterprise</div>
+          <div class="tech-chip">Qdrant Vector DB</div>
+          <div class="tech-chip">FastAPI Backend</div>
+          <div class="tech-chip">multilingual-e5-large</div>
+          <div class="tech-chip">Faster-Whisper</div>
+          <div class="tech-chip">Kokoro-ONNX</div>
+          <div class="tech-chip">Model Context Protocol</div>
+          <div class="tech-chip">MIT License</div>
+        </div>
+      </div>
+
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s6-logo", { opacity: 0, scale: 0.4, rotation: -20 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.8, ease: "back.out(1.5)" }, 0.2);
+        tl.fromTo("#s6-badge", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.6);
+        tl.fromTo("#s6-title", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0.9);
+        tl.fromTo("#s6-sub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 1.3);
+        tl.fromTo("#s6-badges", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 1.7);
+        window.__timelines["scene6"] = tl;
+        tl.seek(0);
+      </script>
+    </template>
+  </body>
+</html>

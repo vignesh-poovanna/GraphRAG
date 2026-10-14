@@ -1,0 +1,273 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          padding: 60px 100px;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          color: #ffffff;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          box-sizing: border-box;
+        }
+
+        .pill-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 18px;
+          border-radius: 9999px;
+          background: rgba(52, 211, 153, 0.12);
+          border: 1px solid rgba(52, 211, 153, 0.35);
+          color: #34d399;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          width: fit-content;
+          margin-bottom: 18px;
+        }
+
+        .scene-title {
+          font-family: 'Inter', sans-serif;
+          font-size: 52px;
+          font-weight: 800;
+          line-height: 1.15;
+          letter-spacing: -0.02em;
+          color: #ffffff;
+          margin-bottom: 14px;
+        }
+
+        .accent-mint {
+          color: #34d399;
+        }
+
+        .scene-subtitle {
+          font-size: 20px;
+          color: #a7bbb0;
+          font-weight: 400;
+          max-width: 1200px;
+          line-height: 1.5;
+          margin-bottom: 34px;
+        }
+
+        .scene4-layout {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 36px;
+        }
+
+        .glass-card {
+          background: rgba(14, 34, 27, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 20px;
+          padding: 30px;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .router-modes {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .card-tag {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 13px;
+          font-weight: 700;
+          color: #e28d38;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          margin-bottom: 8px;
+        }
+
+        .mode-row {
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          padding: 13px 18px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .mode-name {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-weight: 700;
+          font-size: 15px;
+          color: #f6ad55;
+        }
+
+        .mode-duty {
+          font-size: 13.5px;
+          color: #b5c7bd;
+        }
+
+        .verifier-panel {
+          background: rgba(13, 31, 25, 0.9);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 20px;
+          padding: 30px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+
+        .card-title {
+          font-family: 'Inter', sans-serif;
+          font-size: 26px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 12px;
+        }
+
+        .card-body {
+          font-size: 16px;
+          line-height: 1.5;
+          color: #b5c7bd;
+        }
+
+        .tag-row {
+          display: flex;
+          gap: 14px;
+          margin: 20px 0;
+        }
+
+        .tag-chip {
+          flex: 1;
+          padding: 14px 16px;
+          border-radius: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .tag-chip.clear {
+          background: rgba(34, 197, 94, 0.15);
+          border: 1px solid rgba(34, 197, 94, 0.4);
+          color: #4ade80;
+        }
+
+        .tag-chip.inferred {
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.4);
+          color: #fbbf24;
+        }
+
+        .tag-chip.ambiguous {
+          background: rgba(168, 85, 247, 0.15);
+          border: 1px solid rgba(168, 85, 247, 0.4);
+          color: #c084fc;
+        }
+
+        .chip-header {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-weight: 800;
+          font-size: 15px;
+        }
+
+        .chip-desc {
+          font-size: 12px;
+          color: #d1d5db;
+          line-height: 1.3;
+        }
+
+        .guarantee-bar {
+          background: rgba(52, 211, 153, 0.1);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 12px;
+          padding: 14px 20px;
+          font-size: 14px;
+          color: #a7f3d0;
+        }
+      </style>
+
+      <div id="root" data-composition-id="scene4" data-width="1920" data-height="1080">
+        <div id="s4-badge" class="pill-badge">AGENTIC ORCHESTRATION & ANTI-HALLUCINATION</div>
+        <h1 id="s4-title" class="scene-title">
+          5-Mode Agentic Router & <span class="accent-mint">Sub-5ms Verifier</span>
+        </h1>
+        <p id="s4-sub" class="scene-subtitle">
+          Sub-100ms intent classification routes queries into dedicated legal workflows backed by deterministic post-generation validation.
+        </p>
+
+        <div class="scene4-layout">
+          <!-- 5 Modes -->
+          <div id="s4-modes" class="glass-card router-modes">
+            <div class="card-tag">5-MODE INTENT CLASSIFIER</div>
+            <div class="mode-row">
+              <span class="mode-name">1. novelty_check</span>
+              <span class="mode-duty">TKDL prior art & Sec 3(p) non-patentability</span>
+            </div>
+            <div class="mode-row">
+              <span class="mode-name">2. jurisdiction_comparison</span>
+              <span class="mode-duty">Parallel India vs US (FDA) vs EU (THMPD)</span>
+            </div>
+            <div class="mode-row">
+              <span class="mode-name">3. precedent_lookup</span>
+              <span class="mode-duty">Cypher traversal of landmark litigation</span>
+            </div>
+            <div class="mode-row">
+              <span class="mode-name">4. procedural</span>
+              <span class="mode-duty">Application ➔ Licensing ➔ ABS Compliance</span>
+            </div>
+            <div class="mode-row">
+              <span class="mode-name">5. general</span>
+              <span class="mode-duty">Hybrid candidate reranking & statute boost</span>
+            </div>
+          </div>
+
+          <!-- Verifier -->
+          <div id="s4-verifier" class="verifier-panel">
+            <div>
+              <div class="card-tag" style="color:#34d399;">POST-GENERATION GUARANTEE</div>
+              <h2 class="card-title">Sub-5ms Runtime Verifier</h2>
+              <p class="card-body">
+                Scans every claim with strict n-gram string overlap against raw source chunks. Automatically downgrades ungrounded statements.
+              </p>
+              <div class="tag-row">
+                <div class="tag-chip clear">
+                  <span class="chip-header">[CLEAR]</span>
+                  <span class="chip-desc">Direct statutory quote or cited clause</span>
+                </div>
+                <div class="tag-chip inferred">
+                  <span class="chip-header">[INFERRED]</span>
+                  <span class="chip-desc">Multi-source logical deduction</span>
+                </div>
+                <div class="tag-chip ambiguous">
+                  <span class="chip-header">[AMBIGUOUS]</span>
+                  <span class="chip-desc">Discretionary or unsettled law</span>
+                </div>
+              </div>
+            </div>
+            <div class="guarantee-bar">
+              <strong>Zero Hallucination:</strong> Enforces deterministic refusal if evidence is not present in legal corpus.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s4-badge", { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.2);
+        tl.fromTo("#s4-title", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 0.5);
+        tl.fromTo("#s4-sub", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.8);
+        tl.fromTo("#s4-modes", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.7, ease: "power3.out" }, 1.3);
+        tl.fromTo("#s4-verifier", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.7, ease: "power3.out" }, 1.7);
+        tl.to("#root", { opacity: 0, y: -20, duration: 0.5, ease: "power2.in" }, 10.5);
+        window.__timelines["scene4"] = tl;
+        tl.seek(0);
+      </script>
+    </template>
+  </body>
+</html>

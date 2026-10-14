@@ -1,0 +1,1 @@
+5,000 years of traditional Ayurvedic knowledge meets dual-engine GraphRAG. We unified 11,568 Neo4j ontology nodes and 23,313 legal edges with Qdrant vector retrieval and sub-5ms post-generation verification to defend sacred heritage against biopiracy and resolve cross-border patent eligibility. Built for Smart India Hackathon 2026 (Ministry of AYUSH).

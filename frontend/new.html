@@ -1629,22 +1629,19 @@
     .jur-btn { padding:3px 9px; border-radius:6px; border:none; background:transparent; font-family:inherit; font-size:11.5px; font-weight:600; color:var(--text-muted); cursor:pointer; transition:var(--transition-base); white-space:nowrap; }
     .jur-btn.active { background:var(--deep-green); color:#fff; }
 
-    /* ── In-chat Slide Card ── */
+
     .composer-disclaimer { font-size:0.72rem; color:var(--text-muted,#8891a4); text-align:center; padding:5px 12px 2px; }
     .composer-disclaimer a { color:var(--accent,#7c6fff); text-decoration:none; }
     .composer-disclaimer a:hover { text-decoration:underline; }
     .conf-score-line { font-size: 0.78rem; color: var(--text-muted, #888); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-subtle); letter-spacing: 0.02em; }
-    .cite-link { color: var(--accent, #7c6fff); text-decoration: none; font-weight: 600; border-bottom: 1px dotted currentColor; }
-    .cite-link:hover { opacity: 0.8; }
-    .cite-ref { color: var(--text-muted, #888); font-size: 0.85em; cursor: help; }
-    .slide-card { background:var(--surface-sidebar); border:1.5px solid var(--border-subtle); border-radius:14px; padding:18px; width:100%; }
-    .slide-progress { display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:var(--text-faint); margin-bottom:6px; }
-    .slide-bar { height:3px; background:var(--border-subtle); border-radius:99px; margin-bottom:14px; overflow:hidden; }
-    .slide-bar-fill { height:100%; background:var(--primary-green); border-radius:99px; transition:width 0.3s ease; }
-    .slide-question { font-size:14px; font-weight:700; color:var(--deep-green); margin-bottom:14px; line-height:1.4; }
-    .slide-options { display:flex; flex-direction:column; gap:8px; }
-    .slide-opt-btn { text-align:left; padding:10px 14px; border:1.5px solid var(--border-subtle); border-radius:9px; background:#fff; font-family:inherit; font-size:13px; color:var(--text-main); cursor:pointer; transition:all 0.18s; line-height:1.4; }
-    .slide-opt-btn:hover { border-color:var(--primary-green); background:rgba(19,74,63,0.04); }
+    .cite-link { color: var(--primary-green); text-decoration: none; font-weight: 700; font-size: 0.82em; vertical-align: super; border-bottom: none; }
+    .cite-link:hover { text-decoration: underline; }
+    .cite-ref { color: var(--primary-green); font-weight: 700; font-size: 0.82em; vertical-align: super; cursor: help; }
+    .ans-citations { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+    .ans-citations-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 6px; }
+    .ans-citations ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+    .ans-citations li { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
 
     /* ── AETHER MINDS brand badge ── */
     .btn-aether { display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg,#1D3012,#134A3F); color:#E7E6D8; border:1px solid rgba(183,111,38,0.4); border-radius:999px; padding:6px 14px; font-size:12px; font-weight:700; letter-spacing:0.02em; cursor:default; white-space:nowrap; }
@@ -2234,29 +2231,7 @@
     </div>
   </div>
 
-  <!-- ─── MODAL 4: CLASSIFICATION WIZARD MODAL ─── -->
-  <div class="modal-overlay" id="classifierModal" onclick="if(event.target===this)closeClassifierModal()">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
-          </svg>
-          IP Formulation Classifier
-        </h3>
-        <button class="modal-close-btn" onclick="closeClassifierModal()">&#x2715;</button>
-      </div>
-      <div class="modal-body" id="classifierBody">
-        <!-- Populated dynamically -->
-        <div style="text-align:center;padding:30px 0;color:var(--text-muted);">
-          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;color:var(--primary-green)">
-            <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
-          </svg>
-          Loading wizard…
-        </div>
-      </div>
-    </div>
-  </div>
+
 
   <!-- ─── MODAL 5: SETTINGS MODAL ─── -->
   <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettingsModal()">
@@ -2768,19 +2743,42 @@
 
     /* ─── 11. MESSAGE RENDERING & FORMATTING ─── */
     function formatAnswer(text, sources) {
-      // Strip ## Citations block and FOLLOW_UPS — rendered separately
-      text = text.replace(/\n##\s*Citations[\s\S]*/i, '');
+      // Strip ## Citations block (has raw doc IDs from LLM) and FOLLOW_UPS
+      text = text.replace(/##\s*Citations[\s\S]*/i, '');
       text = text.replace(/^FOLLOW_UPS:.*$/gm, '').trim();
 
+      // Capture which [N] numbers are actually cited in the body text (before replacement)
+      const _citedNums = new Set();
+      (text.match(/\[(\d+)\]/g) || []).forEach(m => _citedNums.add(parseInt(m.slice(1,-1))));
+
+      // Build a deduplicated sources map for inline [N] → citation lookup
+      const srcMap = {};
       if (sources && sources.length) {
-        text = text.replace(/\[(\d+)\]/g, (_, n) => {
-          const s = sources[parseInt(n)-1]; if (!s) return `[${n}]`;
-          const url = s.url || s.source_url || s.link || null;
-          const lbl = (s.citation || s.act_or_source_name || s.title || `Source ${n}`).replace(/"/g,'&quot;');
-          return url ? `<a href="${url}" target="_blank" rel="noopener" class="cite-link" title="${lbl}">[${n}]</a>`
-                     : `<span class="cite-ref" title="${lbl}">[${n}]</span>`;
+        sources.forEach((s, i) => {
+          const lbl = s.citation || s.act_or_source_name || s.title || '';
+          if (lbl && !lbl.match(/^doc_[a-f0-9]+$/i)) srcMap[i + 1] = { lbl, url: s.url || s.source_url || s.link || null };
         });
       }
+
+      // Replace inline [N] references
+      text = text.replace(/\[(\d+)\]/g, (_, n) => {
+        const entry = srcMap[parseInt(n)];
+        if (!entry) return `[${n}]`;
+        const lbl = entry.lbl.replace(/"/g, '&quot;');
+        return entry.url
+          ? `<a href="${entry.url}" target="_blank" rel="noopener" class="cite-link" title="${lbl}">[${n}]</a>`
+          : `<span class="cite-ref" title="${lbl}">[${n}]</span>`;
+      });
+
+      // Normalize section headings: LLM sometimes emits ## mid-line (e.g. "[AMBIGUOUS] ## Indian Law")
+      // Insert a newline before any ## that isn't already at the start of a line
+      text = text.replace(/([^\n])##\s/g, '$1\n## ');
+
+      // Qwen3 emits bullets inline: "- bullet1 [TAG] - bullet2 [TAG]"
+      // Split on " - " that follows a confidence tag or a citation so each bullet gets its own line
+      text = text.replace(/(\[(?:CLEAR|AMBIGUOUS|INFERRED)\])\s+-\s+/g, '$1\n- ');
+      // Also catch " - " that follows a citation [N] not yet tagged
+      text = text.replace(/(\[\d+\])\s+-\s+(?=[A-Z])/g, '$1\n- ');
 
       // Strip raw markdown to proper HTML
       let t = text
@@ -2817,6 +2815,19 @@
       // Clean up empty paragraphs and single newlines
       t = t.replace(/<p class="ans-p">\s*<\/p>/g, '')
            .replace(/\n/g, ' ');
+
+      // Append a clean numbered citations list built from the sources array
+      const citedEntries = Object.entries(srcMap)
+        .map(([n, e]) => ({ n: parseInt(n), ...e }))
+        .filter(e => _citedNums.size === 0 || _citedNums.has(e.n))
+        .slice(0, 8);
+      if (citedEntries.length) {
+        const items = citedEntries.map(e =>
+          `<li>[${e.n}] ${e.url ? `<a href="${e.url}" target="_blank" rel="noopener" style="color:var(--primary-green);text-decoration:none;">${e.lbl}</a>` : e.lbl}</li>`
+        ).join('');
+        t += `<div class="ans-citations"><div class="ans-citations-title">Citations</div><ol start="1" style="list-style:none;padding-left:0">${items}</ol></div>`;
+      }
+
       return t;
     }
 
@@ -2849,7 +2860,10 @@
         citBox.className = 'citations-container';
         citations.forEach(c => {
           const url = c.url || c.source_url || c.link || null;
-          const label = c.citation || c.act_or_source_name || c.title || String(c);
+          // Strip raw internal doc IDs (doc_xxxxxxxx) — use human-readable label
+          const rawLabel = c.citation || c.act_or_source_name || c.title || '';
+          const label = rawLabel && !rawLabel.match(/^doc_[a-f0-9]+$/i) ? rawLabel : null;
+          if (!label) return; // skip pills with no useful label
           const pill = document.createElement(url ? 'a' : 'div');
           pill.className = 'citation-pill';
           if (url) { pill.href = url; pill.target = '_blank'; pill.rel = 'noopener'; }
@@ -2942,139 +2956,20 @@
       document.getElementById('typingIndicator')?.remove();
     }
 
-    /* ─── 12. SEND QUERY LOGIC — in-chat formulation slides ─── */
-
-    let _pendingQuery = null;
-
-    // Fallback questions when API offline
-    const FALLBACK_QUESTIONS = [
-      { key: 'Q1', question: 'What type of formulation is this?', options: ['Single herb', 'Polyherbal', 'Mineral / Herbo-mineral', 'Fermented / Processed'] },
-      { key: 'Q2', question: 'What is your primary IP goal?', options: ['Patent protection', 'Trademark / GI', 'Trade secret', 'ABS compliance only'] },
-      { key: 'Q3', question: 'Is this formulation documented in classical texts?', options: ['Yes — Charaka / Sushruta', 'Partially', 'No, novel formulation', 'Unsure'] },
-      { key: 'Q4', question: 'Target market jurisdiction?', options: ['India only', 'International (PCT / EPO)', 'Both India & International', 'US / USPTO focus'] },
-      { key: 'Q5', question: 'Biological material source?', options: ['Indian endemic species', 'Cultivated / common species', 'Mixed origin', 'Synthetic derivatives'] },
-      { key: 'Q6', question: 'Commercial stage?', options: ['Early R&D', 'Pre-clinical', 'Clinical / Registration', 'Already commercialised'] }
-    ];
-
-    let _slideQuestions = [];
-    let _slideAnswers = {};
-    let _slideStep = 0;
-    let _slideCardEl = null;
-
-    let _sessionStarted = false;  // true after first query dispatched
+    /* ─── 12. SEND QUERY LOGIC ─── */
 
     async function sendMessage() {
       const text = questionInput.value.trim();
       if (!text) return;
-      _pendingQuery = text;
       questionInput.value = '';
       autoResizeTextarea();
-      // Skip wizard for follow-ups (after first query)
-      if (_sessionStarted) {
-        transitionToConversation();
-        addMsg('user', text.replace(/</g, '&lt;'), null, null, null, null, null);
-        dispatchQuery(text, {});
-      } else {
-        openWizardForQuery();
-      }
-    }
-
-    async function openWizardForQuery() {
       transitionToConversation();
-      addMsg('user', _pendingQuery.replace(/</g, '&lt;'), null, null, null, null, null);
-
-      // Always pick exactly 4 questions for the first query
-      const _allQ = await (async () => {
-        try {
-          const res = await fetch(`${API}/classify/questions`);
-          if (!res.ok) throw new Error();
-          const d = await res.json();
-          return d.questions;
-        } catch { return FALLBACK_QUESTIONS; }
-      })();
-      const qLow = _pendingQuery.toLowerCase();
-      const _picks = new Set();
-      if (/patent|novel|invention|section 3|prior art/.test(qLow)) { _picks.add('Q1'); _picks.add('Q2'); }
-      if (/biodiversity|abs|nagoya|biological|endemic|species/.test(qLow)) { _picks.add('Q5'); _picks.add('Q6'); }
-      if (/classical|text|charaka|sushruta|traditional|tkdl/.test(qLow)) { _picks.add('Q3'); }
-      if (/jurisdiction|india|international|epo|wipo|pct|uspto/.test(qLow)) { _picks.add('Q4'); }
-      if (/commerci|market|stage|launch|selling/.test(qLow)) { _picks.add('Q6'); }
-      let chosen = _allQ.filter(q => _picks.has(q.key));
-      // Always ensure exactly 4: fill from allQ if needed, cap at 4
-      if (chosen.length < 4) {
-        const extras = _allQ.filter(q => !_picks.has(q.key));
-        chosen = [...chosen, ...extras].slice(0, 4);
-      }
-      if (chosen.length > 4) chosen = chosen.slice(0, 4);
-      _slideQuestions = chosen;
-
-      _slideAnswers = {};
-      _slideStep = 0;
-
-      // Build inline slide card as bot bubble
-      const row = document.createElement('div');
-      row.className = 'chat-msg-row bot';
-      row.id = 'slideCardRow';
-      const av = document.createElement('div');
-      av.className = 'msg-avatar'; av.textContent = 'AI';
-      const blk = document.createElement('div');
-      blk.className = 'msg-content-block'; blk.style.maxWidth = '86%';
-      _slideCardEl = document.createElement('div');
-      _slideCardEl.className = 'slide-card';
-      blk.appendChild(_slideCardEl);
-      row.appendChild(av); row.appendChild(blk);
-      conversationView.appendChild(row);
-      chatScrollArea.scrollTo({ top: chatScrollArea.scrollHeight, behavior: 'smooth' });
-      renderSlideStep();
-    }
-
-    function renderSlideStep() {
-      const total = _slideQuestions.length;
-      if (_slideStep >= total) {
-        document.getElementById('slideCardRow')?.remove();
-        dispatchQuery(_pendingQuery, _slideAnswers);
-        return;
-      }
-      const q = _slideQuestions[_slideStep];
-      const qText = q.text || q.question || '';
-      const pct = Math.round((_slideStep / total) * 100);
-      _slideCardEl.innerHTML = `
-        <div class="slide-progress"><span>Question ${_slideStep + 1} of ${total}</span><span>${pct}% complete</span></div>
-        <div class="slide-bar"><div class="slide-bar-fill" style="width:${pct}%"></div></div>
-        <p class="slide-question">${qText}</p>
-        <div class="slide-options">
-          ${q.options.map((opt,i) => `<button class="slide-opt-btn" data-key="${q.key}" data-idx="${i}">${opt}</button>`).join('')}
-        </div>`;
-      _slideCardEl.querySelectorAll('.slide-opt-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const key = btn.dataset.key;
-          const idx = parseInt(btn.dataset.idx);
-          selectSlideOpt(key, q.options[idx]);
-        });
-      });
-      chatScrollArea.scrollTo({ top: chatScrollArea.scrollHeight, behavior: 'smooth' });
-    }
-
-    function selectSlideOpt(key, value) {
-      _slideAnswers[key] = value;
-      _slideStep++;
-      if (_slideStep >= _slideQuestions.length) {
-        document.getElementById('slideCardRow')?.remove();
-        const summaryLines = _slideQuestions.map(q =>
-          `<b>${q.text || q.question}</b><br><span style="color:var(--accent,#7c6fff)">${_slideAnswers[q.key]}</span>`
-        ).join('<br><br>');
-        addMsg('user', summaryLines, null, null, null, null, null);
-        _sessionStarted = true;
-        dispatchQuery(_pendingQuery, _slideAnswers);
-      } else {
-        renderSlideStep();
-      }
+      addMsg('user', text.replace(/</g, '&lt;'), null, null, null, null, null);
+      dispatchQuery(text, {});
     }
 
     async function dispatchQuery(userText, wizardCtx) {
       stopTTS();
-      transitionToConversation();
-      addMsg('user', userText.replace(/</g, '&lt;'), null, null, null, null, null);
       addTyping();
 
       try {
@@ -3097,7 +2992,7 @@
         removeTyping();
 
         const sources = data.sources || [];
-        const cites = sources.slice(0, 5).filter(s => s.citation || s.act_or_source_name);
+        const cites = sources.slice(0, 5).filter(s => s.citation || s.act_or_source_name || s.title);
         // Confidence: average of non-null source scores; fallback 0.82
         const scoreVals = sources.map(s => s.score).filter(v => v != null && v > 0);
         const topScore = scoreVals.length ? scoreVals.reduce((a,b)=>a+b,0)/scoreVals.length : 0.82;
@@ -3300,110 +3195,7 @@
       closeSettingsModal();
     }
 
-    /* ─── 15. CLASSIFICATION WIZARD ─── */
-    let wizardQuestions = [];
-    let wizardAnswers = {};
-    let wizardStep = 0;
 
-    const classifierModal = document.getElementById('classifierModal');
-    const classifierBody = document.getElementById('classifierBody');
-
-    async function openClassifierModal() {
-      classifierModal.classList.add('open');
-      classifierBody.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text-muted);">Loading wizard…</div>';
-      try {
-        const res = await fetch(`${API}/classify/questions`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        wizardQuestions = data.questions;
-        wizardAnswers = {};
-        wizardStep = 0;
-        renderWizardStep();
-      } catch {
-        classifierBody.innerHTML = '<p style="color:#B91C1C;padding:20px">Could not load wizard questions. Ensure the API server is running.</p>';
-      }
-    }
-
-    function closeClassifierModal() { classifierModal.classList.remove('open'); }
-
-    function renderWizardStep() {
-      if (wizardStep >= wizardQuestions.length) { submitWizard(); return; }
-      const q = wizardQuestions[wizardStep];
-      const total = wizardQuestions.length;
-      const pct = Math.round((wizardStep / total) * 100);
-      classifierBody.innerHTML = `
-        <div style="margin-bottom:18px;">
-          <div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;color:var(--text-faint);margin-bottom:6px;">
-            <span>Question ${wizardStep + 1} of ${total}</span><span>${pct}% complete</span>
-          </div>
-          <div style="height:4px;background:var(--border-subtle);border-radius:99px;overflow:hidden;">
-            <div style="height:100%;width:${pct}%;background:var(--primary-green);border-radius:99px;transition:width 0.3s ease;"></div>
-          </div>
-        </div>
-        <p style="font-size:15px;font-weight:700;color:var(--deep-green);margin-bottom:18px;line-height:1.4;">${q.question}</p>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          ${q.options.map(opt => `
-            <button onclick="selectWizardOption(${JSON.stringify(q.key)}, ${JSON.stringify(opt)})"
-              style="text-align:left;padding:12px 16px;border:1.5px solid var(--border-subtle);border-radius:10px;background:#fff;font-family:inherit;font-size:13.5px;color:var(--text-main);cursor:pointer;transition:all 0.18s;line-height:1.4;"
-              onmouseover="this.style.borderColor='var(--primary-green)';this.style.background='rgba(19,74,63,0.04)';"
-              onmouseout="this.style.borderColor='var(--border-subtle)';this.style.background='#fff';">
-              ${opt}
-            </button>
-          `).join('')}
-        </div>`;
-    }
-
-    function selectWizardOption(key, value) {
-      wizardAnswers[key] = value;
-      wizardStep++;
-      renderWizardStep();
-    }
-
-    async function submitWizard() {
-      classifierBody.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text-muted);">Analysing your answers…</div>';
-      try {
-        const res = await fetch(`${API}/classify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, answers: wizardAnswers })
-        });
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        sessionId = data.session_id;
-        renderWizardResult(data);
-      } catch {
-        classifierBody.innerHTML = '<p style="color:#B91C1C;padding:20px">Classification failed. Please try again.</p>';
-      }
-    }
-
-    function renderWizardResult(data) {
-      const p = data.posture || {};
-      const rows = Object.entries(p).map(([k, v]) => `
-        <tr>
-          <td style="padding:10px 12px;font-weight:600;color:var(--deep-green);border-bottom:1px solid var(--border-subtle);">${k.replace(/_/g,' ')}</td>
-          <td style="padding:10px 12px;color:var(--text-muted);border-bottom:1px solid var(--border-subtle);">${Array.isArray(v) ? v.join(', ') : v}</td>
-        </tr>`).join('');
-      const archLabel = `Archetype ${data.archetype}`;
-      classifierBody.innerHTML = `
-        <div style="text-align:center;margin-bottom:20px;">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(19,74,63,0.1);color:var(--primary-green);display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">
-            <svg viewBox="0 0 24 24" width="28" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>
-          </div>
-          <h4 style="margin:0;font-size:17px;font-weight:800;color:var(--deep-green);">${archLabel}</h4>
-          <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Your IP &amp; regulatory posture</p>
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:13.5px;">${rows}</table>
-        <div style="display:flex;gap:10px;margin-top:20px;">
-          <button id="wizardAskBtn" style="flex:1;background:var(--primary-green);color:#fff;border:none;padding:11px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13.5px;">Ask IP-SAKTI about this →</button>
-          <button onclick="wizardStep=0;wizardAnswers={};renderWizardStep();" style="padding:11px 18px;border:1.5px solid var(--border-subtle);border-radius:10px;background:#fff;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text-muted);">Restart</button>
-        </div>`;
-      document.getElementById('wizardAskBtn').addEventListener('click', () => {
-        closeClassifierModal();
-        questionInput.value = `Based on my formulation profile (${archLabel}), what specific IP strategy should I follow?`;
-        autoResizeTextarea();
-        sendMessage();
-      });
-    }
 
     // Sidebar navigation bindings
     document.getElementById('navKnowledgeGraph').addEventListener('click', (e) => { e.preventDefault(); openGraphModal(); });

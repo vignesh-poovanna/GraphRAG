@@ -1,0 +1,181 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          padding: 60px 100px;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          color: #ffffff;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          box-sizing: border-box;
+        }
+
+        .pill-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 18px;
+          border-radius: 9999px;
+          background: rgba(226, 141, 56, 0.15);
+          border: 1px solid rgba(226, 141, 56, 0.4);
+          color: #f6ad55;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          width: fit-content;
+          margin-bottom: 18px;
+        }
+
+        .scene-title {
+          font-family: 'Inter', sans-serif;
+          font-size: 52px;
+          font-weight: 800;
+          line-height: 1.15;
+          letter-spacing: -0.02em;
+          color: #ffffff;
+          margin-bottom: 14px;
+        }
+
+        .accent-saffron {
+          color: #f6ad55;
+        }
+
+        .scene-subtitle {
+          font-size: 20px;
+          color: #a7bbb0;
+          font-weight: 400;
+          max-width: 1200px;
+          line-height: 1.5;
+          margin-bottom: 40px;
+        }
+
+        .scene1-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 36px;
+        }
+
+        .glass-card {
+          background: rgba(14, 34, 27, 0.75);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 20px;
+          padding: 34px;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .glass-card.highlight {
+          border-color: rgba(226, 141, 56, 0.35);
+          background: linear-gradient(135deg, rgba(20, 48, 38, 0.85) 0%, rgba(11, 26, 21, 0.85) 100%);
+        }
+
+        .card-tag {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 13px;
+          font-weight: 700;
+          color: #e28d38;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          margin-bottom: 12px;
+        }
+
+        .card-title {
+          font-family: 'Inter', sans-serif;
+          font-size: 26px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 14px;
+        }
+
+        .card-body {
+          font-size: 17px;
+          line-height: 1.6;
+          color: #b5c7bd;
+        }
+
+        .fail-list {
+          list-style: none;
+          margin-top: 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .fail-list li {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          font-size: 16px;
+          color: #e5ece8;
+        }
+
+        .fail-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: rgba(239, 68, 68, 0.2);
+          color: #f87171;
+          font-weight: 800;
+          font-size: 13px;
+          flex-shrink: 0;
+        }
+      </style>
+
+      <div id="root" data-composition-id="scene1" data-width="1920" data-height="1080">
+        <div id="s1-badge" class="pill-badge">PROBLEM STATEMENT · SIH26045 · MINISTRY OF AYUSH</div>
+        <h1 id="s1-title" class="scene-title">
+          5,000 Years of Traditional Knowledge.<br>
+          <span class="accent-saffron">Trapped in a Global Legal Blindspot.</span>
+        </h1>
+        <p id="s1-sub" class="scene-subtitle">
+          Ancient Ayurvedic formulations face biopiracy and invalid foreign patents because legal cross-references are fragmented across ancient texts and modern statutes.
+        </p>
+
+        <div class="scene1-grid">
+          <div id="s1-card1" class="glass-card highlight">
+            <div class="card-tag">HISTORICAL BIOPIRACY CRISIS</div>
+            <h2 class="card-title">Turmeric & Neem Revocations</h2>
+            <p class="card-body">
+              Foreign patent offices repeatedly granted unlawful claims on sacred Indian remedies due to lack of multi-jurisdictional, machine-navigable prior-art verification.
+            </p>
+          </div>
+          <div id="s1-card2" class="glass-card">
+            <div class="card-tag" style="color: #f87171;">THE VECTOR-ONLY RAG COLLAPSE</div>
+            <h2 class="card-title">Why Semantic Embeddings Fail</h2>
+            <ul class="fail-list">
+              <li><span class="fail-icon">✕</span> Context fragmentation breaks legal tables & multi-hop statutes</li>
+              <li><span class="fail-icon">✕</span> Omits mandatory National Biodiversity Authority (NBA) Sec 6 clearances</li>
+              <li><span class="fail-icon">✕</span> Severe hallucination on complex cross-border patent eligibility</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s1-badge", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 0.2);
+        tl.fromTo("#s1-title", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 0.5);
+        tl.fromTo("#s1-sub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 0.9);
+        tl.fromTo("#s1-card1", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.7, ease: "back.out(1.2)" }, 1.4);
+        tl.fromTo("#s1-card2", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.7, ease: "back.out(1.2)" }, 1.7);
+        tl.to("#root", { opacity: 0, y: -20, duration: 0.5, ease: "power2.in" }, 7.5);
+        window.__timelines["scene1"] = tl;
+        tl.seek(0);
+      </script>
+    </template>
+  </body>
+</html>

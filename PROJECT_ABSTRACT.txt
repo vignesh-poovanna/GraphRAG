@@ -1,0 +1,32 @@
+PROJECT ABSTRACT / SUMMARY: IP-SAKTI SAHAYAK
+Agentic GraphRAG Platform for Ayurvedic Intellectual Property Protection
+
+Team Name: Aether Mind | Team ID: 162980
+Problem Statement ID: SIH26045 | PS Category: Software
+Theme: MedTech / BioTech / HealthTech | Ministry: Ministry of AYUSH, Government of India
+Demo Video: https://www.youtube.com/watch?v=L7NtvPYUX8M
+
+1. THE PROBLEM
+India's timeless Ayurvedic wisdom often falls prey to biopiracy and tangled patent laws. While India's AYUSH ecosystem is valued at ₹1.5L Crore spanning ~53,023 MSMEs and 7.5L+ practitioners, only 13,253 Indian patents were filed abroad in 2024 (down 7%). Navigating Ayurvedic IP is obstructed by critical roadblocks:
+- Multi-Hop Legal Blind Spots: Standard keyword and vector searches drop multi-step statutory dependencies (Formulation -> TKDL -> Indian Patents Act Sec 3(p) exclusion -> Mandatory National Biodiversity Authority approval under BDA Sec 6).
+- AI Hallucinations: Generic LLMs lack statutory grounding, fabricating invalid patent advice without clause citations.
+- Language Exclusion: Classical texts, legal statutes, and grassroots practitioners speak different languages, creating steep technical and linguistic barriers for rural Vaidyas.
+- Biopiracy Risk: MSMEs lack accessible tools to detect prior art and preempt foreign misappropriation of indigenous formulations.
+
+2. PROPOSED SOLUTION & ARCHITECTURE
+IP-SAKTI Sahayak solves this using GraphRAG intelligence, connecting ancient texts with legal statutes to deliver trusted, clause-cited verdicts. Backed by Bhashini voice support and instant WhatsApp access, it brings effortless IP protection straight to grassroots Vaidyas and MSMEs.
+- Dual-Engine Knowledge Core: Unifies a Vector Engine (Qdrant with 1024-d multilingual embeddings) and a Graph Engine (Neo4j relational legal ontology) to enable cross-statute graph walks.
+- Ingestion Pipeline: Converts complex PDFs and regulatory layouts via IBM Docling into structure-aware Markdown, preserving atomic formulation tables and section hierarchies.
+- 5-Mode Agentic Router: Autonomous LLaMA classifier selects specialized retrieval workflows: Novelty Check (prior-art & Sec 3(p) bars), Jurisdiction Comparison (India vs. US FDA vs. EU THMPD), Precedent Lookup (dispute walks like Turmeric and Neem revocations), Procedural (licensing, inspection, compliance stages), and General synthesis.
+- Deterministic Safety & Trust: Strict refusal guardrail ensures 100% of answers are grounded in exact act/clause citations, tagged with [CLEAR], [INFERRED], or [AMBIGUOUS] badges backed by a sub-5ms ungrounded-claim verifier.
+
+3. ACCESS & INTERACTION
+- Multilingual Voice-to-Voice: Faster-Whisper STT with Kokoro-ONNX TTS (24 kHz) and Bhashini API integration translates regional speech into English for retrieval, returning synthesized native audio.
+- Smart Voice Barge-In: Background Voice Activity Detection (VAD) enables instant interruption and session preservation when the user speaks.
+- Persistent WhatsApp AI: QR-code accessible Twilio consultation with phone-number-based session memory, bringing zero-install IP guidance to mobile devices.
+- Web UI & MCP: Responsive web application plus Model Context Protocol (MCP) server for external AI agents.
+
+4. FEASIBILITY, IMPACT & METRICS
+- Low Infrastructure & Cost: Dockerized Neo4j + Qdrant runs efficiently on commodity hardware (4-8 GB RAM, no GPU required), lowering operational spend for MSME-ready deployment.
+- Economic Impact: 80% pre-filing savings, saving MSMEs ₹50,000–₹1,50,000 per formulation in legal search fees, and reducing preliminary IP clearance from weeks to under 2 seconds.
+- Social & Governance Reach: Directly addresses 345,071+ Ayurveda practitioners and 53,023 AYUSH MSMEs with 100% statutory grounding and auditable, explainable legal responses.

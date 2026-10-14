@@ -429,8 +429,7 @@ class QueryEngine:
         lang_instruction = (
             "Respond in Hindi (Devanagari script). "
             if language == "hi" else
-            "Respond in the same language as the question. "
-            if language not in ("en", "") else ""
+            "Always respond in English regardless of the language of the question. "
         )
 
         if jurisdiction == "India":
@@ -478,6 +477,8 @@ class QueryEngine:
             )
 
         system_msg = (
+            "/no-think\n"   # Qwen3: disable chain-of-thought
+            "LANGUAGE: Respond ONLY in English. Do not use any other language.\n"
             f"{lang_instruction}"
             "You are a regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below. "
@@ -516,6 +517,7 @@ class QueryEngine:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=600,
+                    extra_body={"reasoning_effort": "none"},
                 )
                 answer = resp.choices[0].message.content.strip()
             else:

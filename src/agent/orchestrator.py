@@ -357,8 +357,7 @@ Reply with ONLY the category name, nothing else."""
         lang_instruction = (
             "Respond in Hindi (Devanagari script). "
             if language == "hi" else
-            "Respond in the same language as the question. "
-            if language not in ("en", "") else ""
+            "Always respond in English regardless of the language of the question. "
         )
         # Build jurisdiction-specific section instructions
         if jurisdiction == "India":
@@ -411,6 +410,8 @@ Reply with ONLY the category name, nothing else."""
             )
 
         system_msg = (
+            "/no-think\n"   # Qwen3: disable chain-of-thought
+            "LANGUAGE: Respond ONLY in English. Do not use any other language.\n"
             f"{lang_instruction}"
             "You are a regulatory assistant for Ayurveda IP, Indian patent law, and traditional knowledge. "
             "Answer the QUESTION using ONLY the numbered CONTEXT blocks below.\n\n"
@@ -455,6 +456,7 @@ Reply with ONLY the category name, nothing else."""
                     messages=messages,
                     temperature=0.0,
                     max_tokens=600,
+                    extra_body={"reasoning_effort": "none"},
                 )
                 answer = resp.choices[0].message.content.strip()
             else:
@@ -501,6 +503,10 @@ Reply with ONLY the category name, nothing else."""
                 follow_ups = []
             # Strip the FOLLOW_UPS line from the visible answer
             answer = answer[:fu_match.start()].rstrip()
+
+        # Strip ## Citations block — sources array carries this in structured form;
+        # the LLM sometimes writes doc IDs there which must never reach the frontend.
+        answer = _re.sub(r'##\s*Citations[\s\S]*', '', answer, flags=_re.IGNORECASE).rstrip()
 
         trace.append({"step": "synthesis", "chunks_used": len(chunks), "tags": tags_found})
 

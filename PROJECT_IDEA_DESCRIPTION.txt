@@ -1,0 +1,40 @@
+PROJECT IDEA DESCRIPTION: IP-SAKTI SAHAYAK
+Agentic GraphRAG Platform for Ayurvedic Intellectual Property Protection
+
+Team Name: Aether Mind | Team ID: 162980 | Problem Statement ID: SIH26045
+Theme: MedTech / BioTech / HealthTech | Category: Software | Ministry: Ministry of AYUSH
+Demo Video: https://www.youtube.com/watch?v=L7NtvPYUX8M
+
+1. WHAT WE BUILT: SYSTEM OVERVIEW
+IP-SAKTI Sahayak is an autonomous, agentic GraphRAG platform engineered for Ayurvedic Intellectual Property (IP) protection, biopiracy prevention, and regulatory compliance. It unifies high-dimensional vector search with a multi-hop knowledge graph connecting classical Ayurvedic formulations to statutory legal frameworks, delivering clause-grounded legal clearance for researchers, MSMEs, and grassroots Vaidyas.
+
+2. CORE ARCHITECTURE & TECHNICAL WORKFLOW
+- End-to-End Pipeline:
+  User Query (Web / Voice / WhatsApp / MCP) -> Language normalization via Bhashini APIs -> LLaMA-powered 5-Mode Agentic Router -> Dual Hybrid Retrieval: Qdrant (1024-d vectors) + Neo4j (Cypher multi-hop graph walk) -> LLM Synthesis with Deterministic Refusal Guardrails -> Sub-5ms Claim-to-Statute Verifier -> Grounded Output with Clause Badges ([CLEAR] / [INFERRED] / [AMBIGUOUS]) -> Delivery in native voice/text.
+- Structure-Aware Ingestion: Powered by IBM Docling to parse complex legal gazettes and classical treatises (Charaka & Sushruta Samhitas), extracting atomic formulation tables and statutory hierarchy without losing cross-references.
+- Dual-Engine Hybrid Core:
+  * Qdrant Vector Engine: Indexes dense 1024-d embeddings for semantic conceptual matching and prior-art discovery across indexed legal and classical texts.
+  * Neo4j Property Graph: Maps relational statutory dependencies across acts, clauses, botanical ingredients, therapeutic indications, and regulatory bodies (e.g., Formulation -> Plant -> TKDL record -> Patents Act Sec 3(p) exclusion -> Mandatory National Biodiversity Authority Sec 6 approval).
+
+3. KEY FEATURES & CAPABILITIES
+- 5-Mode Agentic Router: Dynamically routes queries to specialized analytical workflows:
+  1. Novelty & Prior-Art Check: Flags traditional knowledge overlaps and Section 3(p) patentability bars prior to filing.
+  2. Jurisdiction Comparison: Benchmarks formulation compliance across India, US FDA (Dietary Supplements / Botanical Drugs), and EU EMA THMPD.
+  3. Precedent & Case Law Lookup: Navigates historical patent disputes (Turmeric, Neem, Basmati revocations) to extract defensive legal arguments.
+  4. Procedural & Compliance Navigator: Step-by-step roadmaps across AYUSH licensing, GMP certification, clinical trials, and state biodiversity approvals.
+  5. General Synthesis: Deep multi-hop Q&A across the statutory corpus with clause citations.
+- Deterministic Guardrails & Confidence Scoring:
+  * Zero-Hallucination Policy: Mandatory refusal when claims lack backing in the indexed corpus.
+  * Clause-Level Traceability: 100% of claims cite exact acts, sections, and classical texts.
+  * Real-Time Claim Verifier: Sub-5ms deterministic string verifier audits outputs and tags assertions with [CLEAR], [INFERRED], or [AMBIGUOUS] badges.
+
+4. MULTI-CHANNEL ACCESSIBILITY & INCLUSIVITY
+- Real-Time Voice-to-Voice: Integrates faster-whisper STT with Kokoro-ONNX (24 kHz) TTS for conversational audio guidance.
+- Digital India Bhashini Integration: Seamless translation across 22 scheduled Indian languages, enabling rural practitioners to query in regional languages while accessing complex English/Sanskrit statutes.
+- Smart Voice Barge-In: Background Voice Activity Detection (VAD) allows instant interruptions while preserving full session context.
+- Zero-Install WhatsApp AI: QR-code initiated access via Twilio with persistent mobile session memory.
+- Autonomous Agent MCP Server: Model Context Protocol endpoint allowing external legal pipelines and AI systems to query the platform programmatically.
+
+5. RESOURCE EFFICIENCY & DEPLOYMENT FEASIBILITY
+- Lightweight Commodity Footprint: Fully containerized with Docker (Neo4j + Qdrant + services), operating smoothly on commodity CPU hardware (4-8 GB RAM) with zero GPU requirement.
+- Rapid Turnaround & Economic Impact: Resolves multi-statute queries in under 2 seconds, replacing weeks of manual clearance and delivering ~80% pre-filing cost savings (saving MSMEs ₹50k–₹1.5L per formulation).

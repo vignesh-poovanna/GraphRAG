@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          padding: 60px 100px;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          color: #ffffff;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          box-sizing: border-box;
+        }
+
+        .pill-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 18px;
+          border-radius: 9999px;
+          background: rgba(226, 141, 56, 0.15);
+          border: 1px solid rgba(226, 141, 56, 0.4);
+          color: #f6ad55;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          width: fit-content;
+          margin-bottom: 18px;
+        }
+
+        .scene-title {
+          font-family: 'Inter', sans-serif;
+          font-size: 50px;
+          font-weight: 800;
+          line-height: 1.15;
+          letter-spacing: -0.02em;
+          color: #ffffff;
+          margin-bottom: 18px;
+        }
+
+        .accent-saffron {
+          color: #f6ad55;
+        }
+
+        .query-pill {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          padding: 16px 24px;
+          border-radius: 14px;
+          font-size: 18px;
+          color: #e5ece8;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 26px;
+        }
+
+        .query-label {
+          color: #f6ad55;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-weight: 700;
+          font-size: 13px;
+          text-transform: uppercase;
+        }
+
+        .graph-flow-track {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .node-card {
+          flex: 1;
+          background: rgba(14, 34, 27, 0.9);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 16px;
+          padding: 22px 18px;
+          min-height: 220px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+
+        .node-card.highlight-gold {
+          border-color: rgba(226, 141, 56, 0.6);
+          background: linear-gradient(180deg, rgba(28, 52, 42, 0.9) 0%, rgba(17, 36, 28, 0.9) 100%);
+        }
+
+        .node-type {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 11px;
+          font-weight: 700;
+          color: #34d399;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+
+        .node-card.highlight-gold .node-type {
+          color: #f6ad55;
+        }
+
+        .node-name {
+          font-family: 'Inter', sans-serif;
+          font-size: 19px;
+          font-weight: 700;
+          color: #ffffff;
+          margin: 10px 0 6px 0;
+          line-height: 1.3;
+        }
+
+        .node-desc {
+          font-size: 13px;
+          color: #8ea396;
+          line-height: 1.4;
+        }
+
+        .node-arrow {
+          color: #f6ad55;
+          font-size: 22px;
+          font-weight: 800;
+          flex-shrink: 0;
+        }
+
+        .statute-box {
+          margin-top: 26px;
+          background: rgba(226, 141, 56, 0.1);
+          border: 1px solid rgba(226, 141, 56, 0.3);
+          border-radius: 14px;
+          padding: 18px 26px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .statute-text {
+          font-size: 16px;
+          color: #fde68a;
+          line-height: 1.5;
+        }
+
+        .verdict-tag {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 13px;
+          font-weight: 800;
+          background: rgba(34, 197, 94, 0.25);
+          color: #4ade80;
+          padding: 6px 14px;
+          border-radius: 8px;
+          border: 1px solid rgba(74, 222, 128, 0.4);
+          white-space: nowrap;
+          margin-left: 20px;
+        }
+      </style>
+
+      <div id="root" data-composition-id="scene3" data-width="1920" data-height="1080">
+        <div id="s3-badge" class="pill-badge">DEEP ONTOLOGICAL REASONING</div>
+        <h1 id="s3-title" class="scene-title">
+          Live Multi-Hop Traversal: <span class="accent-saffron">Nisha Amalaki</span>
+        </h1>
+        <div id="s3-query" class="query-pill">
+          <span class="query-label">REAL-WORLD USER QUERY:</span>
+          <span>"Can I patent Nisha Amalaki for export to the US, and what statutory approvals are mandatory?"</span>
+        </div>
+
+        <!-- 5 Connected Graph Nodes -->
+        <div class="graph-flow-track">
+          <div id="s3-n1" class="node-card">
+            <div class="node-type">FORMULATION</div>
+            <div class="node-name">Nisha Amalaki</div>
+            <div class="node-desc">Ayurvedic classical formulation for metabolic wellness.</div>
+          </div>
+          <div id="s3-a1" class="node-arrow">➔</div>
+          <div id="s3-n2" class="node-card">
+            <div class="node-type">INGREDIENT</div>
+            <div class="node-name">Curcuma longa</div>
+            <div class="node-desc">Indian biological resource & sacred rhizome.</div>
+          </div>
+          <div id="s3-a2" class="node-arrow">➔</div>
+          <div id="s3-n3" class="node-card">
+            <div class="node-type">DOCUMENTATION</div>
+            <div class="node-name">TKDL Corpus</div>
+            <div class="node-desc">5,000-year prior art documented in Pharmacopoeia.</div>
+          </div>
+          <div id="s3-a3" class="node-arrow">➔</div>
+          <div id="s3-n4" class="node-card highlight-gold">
+            <div class="node-type">STATUTE EXCLUSION</div>
+            <div class="node-name">Patents Act Sec 3(p)</div>
+            <div class="node-desc">Traditional knowledge is strictly non-patentable.</div>
+          </div>
+          <div id="s3-a4" class="node-arrow">➔</div>
+          <div id="s3-n5" class="node-card highlight-gold">
+            <div class="node-type">MANDATORY APPROVAL</div>
+            <div class="node-name">NBA Section 6</div>
+            <div class="node-desc">Prior National Biodiversity Authority clearance required.</div>
+          </div>
+        </div>
+
+        <div id="s3-statute" class="statute-box">
+          <div class="statute-text">
+            <strong>Groundbreaking Discovery:</strong> Vector search alone missed Section 6 because the prompt never said "biodiversity". Graph traversal uncovered the statutory clearance path in 12ms.
+          </div>
+          <div class="verdict-tag">[CLEAR] VERIFIED GROUNDING</div>
+        </div>
+      </div>
+
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s3-badge", { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.2);
+        tl.fromTo("#s3-title", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 0.5);
+        tl.fromTo("#s3-query", { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.6, ease: "power2.out" }, 0.9);
+        
+        // Sequential node entrance
+        tl.fromTo("#s3-n1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 1.4);
+        tl.fromTo("#s3-a1", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3 }, 1.8);
+        tl.fromTo("#s3-n2", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 2.1);
+        tl.fromTo("#s3-a2", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3 }, 2.5);
+        tl.fromTo("#s3-n3", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 2.8);
+        tl.fromTo("#s3-a3", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3 }, 3.2);
+        tl.fromTo("#s3-n4", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 3.5);
+        tl.fromTo("#s3-a4", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3 }, 3.9);
+        tl.fromTo("#s3-n5", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 4.2);
+        tl.fromTo("#s3-statute", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 5.0);
+        tl.to("#root", { opacity: 0, y: -20, duration: 0.5, ease: "power2.in" }, 9.5);
+        window.__timelines["scene3"] = tl;
+        tl.seek(0);
+      </script>
+    </template>
+  </body>
+</html>
