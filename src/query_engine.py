@@ -510,16 +510,27 @@ class QueryEngine:
 
             if api_key:
                 # Use OpenAI-compatible client (Groq, Cerebras, etc.)
+                import time as _time
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key, base_url=base_url)
-                resp = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=600,
-                    extra_body={"reasoning_effort": "none"},
-                )
-                answer = resp.choices[0].message.content.strip()
+                for attempt in range(4):
+                    try:
+                        resp = client.chat.completions.create(
+                            model=model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=600,
+                            extra_body={"reasoning_effort": "none"},
+                        )
+                        answer = resp.choices[0].message.content.strip()
+                        break
+                    except Exception as err:
+                        if "429" in str(err) and attempt < 3:
+                            wait = 8 * (attempt + 1)
+                            logger.warning(f"Rate limited (429). Retrying in {wait}s...")
+                            _time.sleep(wait)
+                        else:
+                            raise err
             else:
                 # Fallback: local Ollama
                 import ollama
@@ -531,7 +542,7 @@ class QueryEngine:
                 )
                 answer = response["message"]["content"].strip()
         except Exception as exc:
-            logger.warning(f"Ollama generation failed: {exc}")
+            logger.warning(f"Generation failed: {exc}")
             answer = f"Error generating answer via LLM: {exc}"
 
         # If answer is fallback, don't return unrelated sources
